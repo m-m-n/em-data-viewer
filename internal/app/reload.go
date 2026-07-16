@@ -1,7 +1,10 @@
 package app
 
 import (
+	"strings"
+
 	"data-viewer/internal/config"
+	"data-viewer/internal/markup"
 	"data-viewer/internal/runner"
 	"data-viewer/internal/ui"
 )
@@ -35,6 +38,29 @@ func applyConfig(cfg config.Config, err error, u UI, r Runner) {
 	})
 	u.SetSections(sectionViewModels(cfg.Sections))
 	r.Apply(runnerSections(cfg.Sections))
+	rehydrateSections(cfg.Sections, u, r)
+}
+
+// rehydrateSections re-populates the freshly (re)created section widgets
+// from the runner's retained per-section state immediately after
+// SetSections, closing the blank window a style-only reload would
+// otherwise leave until the next runner event. It uses the same
+// render convention as the append event path (events.go's
+// translateEvent/KindAppend): join the runner's buffered lines and pass
+// them through markup.Render before UpdateSection. Sections with no
+// retained content (e.g. an interval section's last output, which the
+// runner does not retain between runs) are left untouched; they fill in
+// on the next run/event as before.
+func rehydrateSections(sections []config.SectionConfig, u UI, r Runner) {
+	for _, s := range sections {
+		key := s.Key()
+		lines := r.Snapshot(key)
+		if len(lines) == 0 {
+			continue
+		}
+		rendered, _ := markup.Render(strings.Join(lines, "\n"))
+		u.UpdateSection(key, rendered, false)
+	}
 }
 
 // sectionViewModels translates config sections into UI view models,

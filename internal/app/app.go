@@ -110,6 +110,7 @@ func (a *App) Run() int {
 
 	go a.eventLoop()
 
+	defer a.Quit()
 	return a.ui.Run()
 }
 

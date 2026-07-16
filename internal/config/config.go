@@ -48,10 +48,13 @@ type SectionConfig struct {
 	Style    map[string]string
 }
 
-// Key returns a stable identity for the section derived from
-// Command, Mode, Interval, and MaxLines. Style is deliberately
-// excluded so style-only config edits keep the same key (FR3):
-// reconciliation treats a section with an unchanged Key as unchanged.
+// Key returns a stable identity for the section derived from Name,
+// Command, Mode, Interval, and MaxLines. Name is included so that two
+// sections with identical execution settings but different names are
+// treated as distinct sections; renaming a section therefore restarts
+// its process. Style is deliberately excluded so style-only config
+// edits keep the same key (FR3): reconciliation treats a section with
+// an unchanged Key as unchanged.
 func (s SectionConfig) Key() string {
-	return fmt.Sprintf("%s\x00%s\x00%d\x00%d", s.Command, s.Mode, s.Interval, s.MaxLines)
+	return fmt.Sprintf("%s\x00%s\x00%s\x00%d\x00%d", s.Name, s.Command, s.Mode, s.Interval, s.MaxLines)
 }
