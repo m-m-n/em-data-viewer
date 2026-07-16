@@ -1,0 +1,123 @@
+<!-- generated from tokens.yaml — edit the YAML, not this file -->
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>data-viewer design tokens</title>
+<style>
+  body { font-family: sans-serif; margin: 24px; background: #f4f4f4; color: #222; max-width: 900px; }
+  h1 { font-size: 20px; }
+  h2 { font-size: 16px; margin-top: 32px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
+  .meta { background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 12px 16px; }
+  .meta dt { font-weight: bold; margin-top: 8px; }
+  table { border-collapse: collapse; width: 100%; background: #fff; }
+  th, td { border: 1px solid #ddd; padding: 8px 10px; text-align: left; font-size: 13px; vertical-align: top; }
+  th { background: #eee; }
+  .swatch { display: inline-block; width: 120px; height: 36px; border: 1px solid #999; border-radius: 4px; vertical-align: middle; }
+  .checker { background-image: linear-gradient(45deg,#ccc 25%,transparent 25%),linear-gradient(-45deg,#ccc 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#ccc 75%),linear-gradient(-45deg,transparent 75%,#ccc 75%); background-size: 12px 12px; background-position: 0 0,0 6px,6px -6px,-6px 0; }
+  .on-sample { width: 220px; padding: 8px 12px; border-radius: 4px; font-family: monospace; font-size: 13px; }
+  code { background: #eee; padding: 1px 4px; border-radius: 3px; }
+  .type-sample-output { font-family: monospace; font-size: 12pt; line-height: 1.4; }
+  .type-sample-label { font-family: sans-serif; font-size: 9pt; line-height: 1.2; }
+</style>
+</head>
+<body>
+<h1>data-viewer — design tokens</h1>
+
+<h2>meta</h2>
+<dl class="meta">
+  <dt>tone</dt>
+  <dd>半透明ダークのミニマルなウィジェット。デスクトップに溶け込み、装飾は枠と余白のみで主張しない。表示情報（コマンド出力）が主役</dd>
+  <dt>naming</dt>
+  <dd>用途ベース（role-based）。値ベースの命名（blue-500 等）はしない</dd>
+</dl>
+
+<h2>color</h2>
+<table>
+  <tr><th>token</th><th>swatch</th><th>value</th><th>description</th></tr>
+  <tr>
+    <td><code>surface</code></td>
+    <td><span class="swatch checker"><span style="display:block;width:100%;height:100%;background:#1e1e1eee;border-radius:4px;"></span></span></td>
+    <td>#1e1e1eee</td>
+    <td>ウィジェットウィンドウの背景（半透明ダーク）。ユーザーが config で上書きするデフォルト値。広い面はこれ一色で、セクションごとの面色は作らない</td>
+  </tr>
+  <tr>
+    <td><code>on-surface</code></td>
+    <td><span class="on-sample" style="display:inline-block;background:#1e1e1e;color:#e0e0e0;">CPU: 12% MEM: 40%</span></td>
+    <td>#e0e0e0</td>
+    <td>surface 上の出力テキストの基準色。コマンド出力が Pango マークアップで独自色を持つ場合はそちらが優先される</td>
+  </tr>
+  <tr>
+    <td><code>on-surface-dim</code></td>
+    <td><span class="on-sample" style="display:inline-block;background:#1e1e1e;color:#9e9e9e;">section label</span></td>
+    <td>#9e9e9e</td>
+    <td>セクション名ラベルなどの補助テキスト。本文（出力）には使わない</td>
+  </tr>
+  <tr>
+    <td><code>frame</code></td>
+    <td><span class="swatch" style="background:#888888;"></span></td>
+    <td>#888888</td>
+    <td>ウィンドウ外周の枠線。セクション区切りには使わない（区切りは spacing で表現する）</td>
+  </tr>
+  <tr>
+    <td><code>error</code></td>
+    <td><span class="on-sample" style="display:inline-block;background:#1e1e1e;color:#e57373;">command exited with status 1</span></td>
+    <td>#e57373</td>
+    <td>エラーテキスト（設定エラーバナー・セクション内コマンドエラー）専用。正常時の装飾には使わない</td>
+  </tr>
+  <tr>
+    <td><code>error-surface</code></td>
+    <td><span class="on-sample" style="display:inline-block;background:#3a2222;color:#e57373;">config parse error: line 12</span></td>
+    <td>#3a2222ee</td>
+    <td>設定エラーバナーの背景。エラーバナー以外の面には使わない</td>
+  </tr>
+</table>
+
+<h2>typography</h2>
+<table>
+  <tr><th>token</th><th>sample</th><th>value</th><th>description</th></tr>
+  <tr>
+    <td><code>output</code></td>
+    <td><span class="type-sample-output">14:03:22 load 0.42</span></td>
+    <td>monospace / 12pt / 1.4</td>
+    <td>コマンド出力の基準。桁揃えが崩れないよう等幅のみ。ユーザーが config の style.font で上書きするデフォルト値</td>
+  </tr>
+  <tr>
+    <td><code>section-label</code></td>
+    <td><span class="type-sample-label">clock</span></td>
+    <td>sans-serif / 9pt / 1.2</td>
+    <td>セクション名ラベル。出力本文には使わない</td>
+  </tr>
+</table>
+
+<h2>spacing</h2>
+<table>
+  <tr><th>token</th><th>value</th><th>description</th></tr>
+  <tr>
+    <td><code>unit</code></td>
+    <td>6px</td>
+    <td>全スペーシングはこの倍数。ウィンドウ内周パディング 2 unit、セクション間 2 unit、ラベルと出力の間 1 unit。恣意的な中間値を作らない</td>
+  </tr>
+</table>
+
+<h2>radius</h2>
+<table>
+  <tr><th>token</th><th>value</th><th>description</th></tr>
+  <tr>
+    <td><code>window</code></td>
+    <td>8px</td>
+    <td>ウィンドウ外周の角丸。ウィンドウ以外（バナー・セクション）には使わない（バナーは角丸なしで全幅）</td>
+  </tr>
+</table>
+
+<h2>border</h2>
+<table>
+  <tr><th>token</th><th>value</th><th>description</th></tr>
+  <tr>
+    <td><code>frame-width</code></td>
+    <td>1px</td>
+    <td>ウィンドウ外周の枠線幅。太枠で存在感を出さない</td>
+  </tr>
+</table>
+</body>
+</html>

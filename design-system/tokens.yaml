@@ -1,0 +1,46 @@
+meta:
+  tone: "半透明ダークのミニマルなウィジェット。デスクトップに溶け込み、装飾は枠と余白のみで主張しない。表示情報（コマンド出力）が主役"
+  naming: "用途ベース（role-based）。値ベースの命名（blue-500 等）はしない"
+
+color:
+  surface:
+    value: "#1e1e1eee"
+    description: "ウィジェットウィンドウの背景（半透明ダーク）。ユーザーが config で上書きするデフォルト値。広い面はこれ一色で、セクションごとの面色は作らない"
+  on-surface:
+    value: "#e0e0e0"
+    description: "surface 上の出力テキストの基準色。コマンド出力が Pango マークアップで独自色を持つ場合はそちらが優先される"
+  on-surface-dim:
+    value: "#9e9e9e"
+    description: "セクション名ラベルなどの補助テキスト。本文（出力）には使わない"
+  frame:
+    value: "#888888"
+    description: "ウィンドウ外周の枠線。セクション区切りには使わない（区切りは spacing で表現する）"
+  error:
+    value: "#e57373"
+    description: "エラーテキスト（設定エラーバナー・セクション内コマンドエラー）専用。正常時の装飾には使わない"
+  error-surface:
+    value: "#3a2222ee"
+    description: "設定エラーバナーの背景。エラーバナー以外の面には使わない"
+
+typography:
+  output:
+    value: { family: "monospace", size: "12pt", line-height: "1.4" }
+    description: "コマンド出力の基準。桁揃えが崩れないよう等幅のみ。ユーザーが config の style.font で上書きするデフォルト値"
+  section-label:
+    value: { family: "sans-serif", size: "9pt", line-height: "1.2" }
+    description: "セクション名ラベル。出力本文には使わない"
+
+spacing:
+  unit:
+    value: "6px"
+    description: "全スペーシングはこの倍数。ウィンドウ内周パディング 2 unit、セクション間 2 unit、ラベルと出力の間 1 unit。恣意的な中間値を作らない"
+
+radius:
+  window:
+    value: "8px"
+    description: "ウィンドウ外周の角丸。ウィンドウ以外（バナー・セクション）には使わない（バナーは角丸なしで全幅）"
+
+border:
+  frame-width:
+    value: "1px"
+    description: "ウィンドウ外周の枠線幅。太枠で存在感を出さない"
