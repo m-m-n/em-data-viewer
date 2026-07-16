@@ -89,7 +89,13 @@ func New(configPath string) *App {
 // banner, AC-2), start the config watcher and the runner-event consumer,
 // then block on the UI main loop, returning the process exit code.
 func (a *App) Run() int {
-	reload(a.configPath, a.holder, a.ui, a.runner)
+	// The GTK frame does not exist until ui.Run's ConnectActivate callback
+	// fires, and every UI method silently no-ops while the frame is nil, so
+	// the initial reload must be scheduled onto the GTK main loop (running
+	// after activation) rather than invoked directly here.
+	dispatchOnMainLoop(func() {
+		reload(a.configPath, a.holder, a.ui, a.runner)
+	})
 
 	w, err := config.NewWatcher(a.configPath, watchDebounce)
 	if err != nil {
@@ -111,7 +117,9 @@ func (a *App) Run() int {
 // Quit closes the watcher.
 func (a *App) watchLoop() {
 	for range a.watcher.Notify() {
-		reload(a.configPath, a.holder, a.ui, a.runner)
+		dispatchOnMainLoop(func() {
+			reload(a.configPath, a.holder, a.ui, a.runner)
+		})
 	}
 }
 

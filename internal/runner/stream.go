@@ -38,12 +38,16 @@ func runStream(ctx context.Context, key, command string, buf *RingBuffer, events
 		select {
 		case line, ok := <-lines:
 			if !ok {
-				err := <-waitErr
-				msg := "process exited"
-				if err != nil {
-					msg = err.Error()
+				select {
+				case err := <-waitErr:
+					msg := "process exited"
+					if err != nil {
+						msg = err.Error()
+					}
+					sendEvent(ctx, events, Event{SectionKey: key, Kind: KindError, Text: msg})
+				case <-ctx.Done():
+					terminate(cmd, waitErr)
 				}
-				sendEvent(ctx, events, Event{SectionKey: key, Kind: KindError, Text: msg})
 				return
 			}
 			buf.Append(line)
