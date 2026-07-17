@@ -144,19 +144,13 @@ func New(configPath string) *App {
 		triggers:       make(chan struct{}),
 		done:           make(chan struct{}),
 	}
-	// ui.New does not yet accept the onKeepAboveToggle callback that
-	// IMPLEMENTATION.md's Shared Components pins as a constructor parameter
-	// (task0002's contract); a.onKeepAboveToggle is ready to be passed once
-	// it does (e.g. ui.New(a.Quit, a.onKeepAboveToggle)). Until then the
-	// menu toggle has no real trigger to invoke it from, since ui.go/menu.go
-	// are not this task's files to change.
-	a.ui = ui.New(a.Quit)
+	a.ui = ui.New(a.Quit, a.onKeepAboveToggle)
 	return a
 }
 
 // onKeepAboveToggle is the method form of handleKeepAboveToggle, wired to
-// this App's collaborators; see New's comment for its pending registration
-// with the real UI construction.
+// this App's collaborators and registered as ui.New's onKeepAboveToggle
+// callback in New above.
 func (a *App) onKeepAboveToggle(enabled bool) {
 	handleKeepAboveToggle(enabled, a.configPath, a.ui, a.writeKeepAbove, dispatchOnMainLoop)
 }
