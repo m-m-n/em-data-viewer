@@ -21,6 +21,7 @@ const (
 	DefaultWindowWidth  = 400
 	DefaultWindowHeight = 600
 	DefaultMaxLines     = 100
+	DefaultKeepAbove    = true
 )
 
 // Config is the parsed and validated application configuration.
@@ -30,11 +31,13 @@ type Config struct {
 	Sections []SectionConfig
 }
 
-// Window holds the widget window's size and style settings.
+// Window holds the widget window's size, style, and keep-above
+// settings.
 type Window struct {
-	Width  int
-	Height int
-	Style  map[string]string
+	Width     int
+	Height    int
+	Style     map[string]string
+	KeepAbove bool
 }
 
 // SectionConfig defines one output section: the command it runs, how
