@@ -5,6 +5,7 @@ go 1.26
 require (
 	github.com/diamondburned/gotk4/pkg v0.3.1
 	github.com/fsnotify/fsnotify v1.10.1
+	github.com/jezek/xgb v1.1.1
 	gopkg.in/yaml.v3 v3.0.1
 )
 

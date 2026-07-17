@@ -46,14 +46,17 @@ type UI struct {
 }
 
 // New constructs a UI. quit is invoked when the user chooses 終了 from the
-// context menu.
-func New(quit func()) *UI {
+// context menu; onKeepAboveToggle is invoked with the NEW desired value
+// whenever the user toggles the「最前面に固定」menu check item (the caller
+// routes this to SetKeepAbove and to persisting the value, per
+// IMPLEMENTATION.md).
+func New(quit func(), onKeepAboveToggle func(enabled bool)) *UI {
 	u := &UI{
 		app:  gtk.NewApplication(applicationID, gio.ApplicationFlagsNone),
 		quit: quit,
 	}
 	u.app.ConnectActivate(func() {
-		u.frame = newFrame(u.app, u.requestQuit)
+		u.frame = newFrame(u.app, u.requestQuit, onKeepAboveToggle)
 		u.frame.win.Present()
 	})
 	return u
@@ -110,4 +113,26 @@ func (u *UI) SetConfigError(message string) {
 		return
 	}
 	u.frame.banner.setError(message)
+}
+
+// SetKeepAbove applies the keep-above state to the window: on X11 it sets
+// (or clears) _NET_WM_STATE_ABOVE on the toplevel — deferred to the
+// window's first realize when called before then; on Wayland it is a
+// no-op apply, but the menu check mark still tracks the value
+// (IMPLEMENTATION.md Shared Components; task plan AC-3, AC-4, AC-5).
+func (u *UI) SetKeepAbove(enabled bool) {
+	if u.frame == nil {
+		return
+	}
+	u.frame.setKeepAbove(enabled)
+}
+
+// KeepAboveSupported reports whether the current backend can apply
+// keep-above right now: true iff X11 (including XWayland) and the
+// toplevel's XID is reachable (IMPLEMENTATION.md Shared Components).
+func (u *UI) KeepAboveSupported() bool {
+	if u.frame == nil {
+		return false
+	}
+	return u.frame.keepAboveSupported()
 }

@@ -90,7 +90,10 @@ func New(configPath string) *App {
 		triggers:    make(chan struct{}),
 		done:        make(chan struct{}),
 	}
-	a.ui = ui.New(a.Quit)
+	// onKeepAboveToggle wiring (menu toggle -> apply + config write-back) is
+	// task0003's scope (IMPLEMENTATION.md); nil here is inert (the item's
+	// change-state handler simply won't be routed to anything yet).
+	a.ui = ui.New(a.Quit, nil)
 	return a
 }
 
