@@ -150,3 +150,52 @@ func TestRunStream_CtxCancelKillsStubbornChild(t *testing.T) {
 		t.Fatal("timed out waiting for runStream to return after killing a stubborn child")
 	}
 }
+
+// TestRunStream_OversizedLineTerminatesAndEmitsError references AC-4: a
+// stream whose output contains a line (token) exceeding the scanner's
+// line limit is terminated and reaped rather than left running
+// indefinitely (the command below never produces a newline, so it
+// would otherwise run forever), and an error event is emitted instead
+// of silently waiting for the natural exit that will never come.
+func TestRunStream_OversizedLineTerminatesAndEmitsError(t *testing.T) {
+	oldLimit := streamLineLimit
+	oldGrace := terminateGrace
+	streamLineLimit = 64
+	terminateGrace = 50 * time.Millisecond
+	defer func() {
+		streamLineLimit = oldLimit
+		terminateGrace = oldGrace
+	}()
+
+	events := make(chan Event, 10)
+	buf := NewRingBuffer(10)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		runStream(ctx, "huge", `while true; do printf 'a'; done`, buf, events)
+	}()
+
+	select {
+	case ev := <-events:
+		if ev.Kind != KindError {
+			t.Fatalf("Kind = %v, want %v", ev.Kind, KindError)
+		}
+		if ev.SectionKey != "huge" {
+			t.Fatalf("SectionKey = %q, want %q", ev.SectionKey, "huge")
+		}
+		if ev.Text == "" {
+			t.Error("Text is empty, want a descriptive error message")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for oversized-line error event")
+	}
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for runStream to return after an oversized line (process should be reaped, not stranded)")
+	}
+}
