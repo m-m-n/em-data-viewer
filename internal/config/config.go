@@ -21,6 +21,7 @@ const (
 	DefaultWindowWidth  = 400
 	DefaultWindowHeight = 600
 	DefaultMaxLines     = 100
+	DefaultKeepAbove    = true
 )
 
 // Config is the parsed and validated application configuration.
@@ -30,14 +31,8 @@ type Config struct {
 	Sections []SectionConfig
 }
 
-// Window holds the widget window's size and style settings.
-//
-// KeepAbove is the keep-above-other-windows setting (window-drag-keep-above
-// feature, IMPLEMENTATION.md Shared Components: "bool field"). This app
-// package (task0003) only needs the field to exist to route its value to
-// the UI; YAML parsing/defaulting (Load applies default true when the key
-// is absent) and validation are task0001's responsibility and are not
-// implemented here.
+// Window holds the widget window's size, style, and keep-above
+// settings.
 type Window struct {
 	Width     int
 	Height    int

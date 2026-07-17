@@ -103,6 +103,53 @@ sections: []
 	})
 }
 
+// TestLoad_KeepAboveDefaultAndOverride references AC-1: keep_above
+// absent defaults to true; an explicit false or true is honored.
+func TestLoad_KeepAboveDefaultAndOverride(t *testing.T) {
+	tests := []struct {
+		name string
+		yaml string
+		want bool
+	}{
+		{
+			name: "absent defaults to true",
+			yaml: `sections: []`,
+			want: true,
+		},
+		{
+			name: "explicit false",
+			yaml: `
+window:
+  keep_above: false
+sections: []
+`,
+			want: false,
+		},
+		{
+			name: "explicit true",
+			yaml: `
+window:
+  keep_above: true
+sections: []
+`,
+			want: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := writeTempConfig(t, tt.yaml)
+			cfg, err := Load(path)
+			if err != nil {
+				t.Fatalf("Load() error = %v, want nil", err)
+			}
+			if cfg.Window.KeepAbove != tt.want {
+				t.Errorf("Window.KeepAbove = %v, want %v", cfg.Window.KeepAbove, tt.want)
+			}
+		})
+	}
+}
+
 // TestLoad_ValidationErrors references AC-2.
 func TestLoad_ValidationErrors(t *testing.T) {
 	tests := []struct {
@@ -180,6 +227,14 @@ sections:
   - command: "date"
     mode: interval
     interval: -1s
+`,
+		},
+		{
+			name: "non-boolean keep_above",
+			yaml: `
+window:
+  keep_above: "not-a-bool"
+sections: []
 `,
 		},
 		{
