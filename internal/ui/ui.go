@@ -11,6 +11,21 @@ import (
 // beyond satisfying GApplication's identifier requirement.
 const applicationID = "org.dataviewer.Widget"
 
+// osArgs is a seam over os.Args for testability (runArgs below).
+var osArgs = os.Args
+
+// runArgs returns the argument slice passed to the GTK application's Run
+// call: only the program name (index 0). cmd/data-viewer's own CLI parsing
+// is the single owner of the application-specific config-path argument
+// (FR2); that argument must never reach GApplication, where it would be
+// treated as a file to open and suppress the "activate" signal (AC-1).
+func runArgs() []string {
+	if len(osArgs) == 0 {
+		return nil
+	}
+	return osArgs[:1]
+}
+
 // WindowSettings is the window-level configuration the app layer applies
 // to the UI, translated from config.Config.Window into the ui package's
 // own types so ui stays decoupled from the config package.
@@ -55,7 +70,7 @@ func (u *UI) requestQuit() {
 
 // Run blocks on the GTK main loop until the application quits.
 func (u *UI) Run() int {
-	return u.app.Run(os.Args)
+	return u.app.Run(runArgs())
 }
 
 // ApplyWindow (re-)applies window-level settings to the existing window
