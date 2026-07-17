@@ -57,13 +57,12 @@ func applyKeepAbove(u UI, enabled bool) {
 	}
 }
 
-// KeepAboveWriter persists the keep-above toggle to the config file
-// (config.UpdateKeepAbove, task0001's contract per IMPLEMENTATION.md Shared
-// Components: "UpdateKeepAbove(path string, value bool) error"). Declared
-// as a function type -- the same seam style as dispatch func(func()) below
-// -- rather than referencing config.UpdateKeepAbove directly, so this
-// package's toggle-handling wiring is unit-testable against a fake writer
-// independently of task0001 landing (worktree independence).
+// KeepAboveWriter persists the keep-above toggle to the config file;
+// config.UpdateKeepAbove (task0001) satisfies it. Declared as a function
+// type -- the same seam style as dispatch func(func()) below -- so this
+// package's toggle-handling wiring stays unit-testable against a fake
+// writer, independently of which config write-back implementation New
+// wires in.
 type KeepAboveWriter func(path string, enabled bool) error
 
 // handleKeepAboveToggle implements the menu toggle callback (AC-2, AC-3):
@@ -106,13 +105,14 @@ type Watcher interface {
 // construction, startup ordering, event routing and shutdown described in
 // the task plan.
 type App struct {
-	configPath  string
-	holder      *config.Holder
-	runner      Runner
-	ui          UI
-	watcher     Watcher
-	store       *sectionStore
-	generations *generationTracker
+	configPath     string
+	holder         *config.Holder
+	runner         Runner
+	ui             UI
+	watcher        Watcher
+	store          *sectionStore
+	generations    *generationTracker
+	writeKeepAbove KeepAboveWriter
 
 	triggers chan struct{}
 	done     chan struct{}
@@ -135,16 +135,30 @@ func ResolveConfigPath(explicit string) (string, error) {
 // UI's main loop.
 func New(configPath string) *App {
 	a := &App{
-		configPath:  configPath,
-		holder:      config.NewHolder(),
-		runner:      runner.New(),
-		store:       newSectionStore(),
-		generations: newGenerationTracker(),
-		triggers:    make(chan struct{}),
-		done:        make(chan struct{}),
+		configPath:     configPath,
+		holder:         config.NewHolder(),
+		runner:         runner.New(),
+		store:          newSectionStore(),
+		generations:    newGenerationTracker(),
+		writeKeepAbove: config.UpdateKeepAbove,
+		triggers:       make(chan struct{}),
+		done:           make(chan struct{}),
 	}
+	// ui.New does not yet accept the onKeepAboveToggle callback that
+	// IMPLEMENTATION.md's Shared Components pins as a constructor parameter
+	// (task0002's contract); a.onKeepAboveToggle is ready to be passed once
+	// it does (e.g. ui.New(a.Quit, a.onKeepAboveToggle)). Until then the
+	// menu toggle has no real trigger to invoke it from, since ui.go/menu.go
+	// are not this task's files to change.
 	a.ui = ui.New(a.Quit)
 	return a
+}
+
+// onKeepAboveToggle is the method form of handleKeepAboveToggle, wired to
+// this App's collaborators; see New's comment for its pending registration
+// with the real UI construction.
+func (a *App) onKeepAboveToggle(enabled bool) {
+	handleKeepAboveToggle(enabled, a.configPath, a.ui, a.writeKeepAbove, dispatchOnMainLoop)
 }
 
 // Run performs the startup sequence: initial load (failure → empty config +
