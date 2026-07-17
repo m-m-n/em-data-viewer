@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"reflect"
 	"sync"
@@ -55,6 +56,17 @@ func (f *fakeRunner) Stop()                        { f.stopCalls++ }
 func (f *fakeRunner) Events() <-chan runner.Event  { return nil }
 func (f *fakeRunner) Snapshot(key string) []string { return f.snapshots[key] }
 
+// capturingDispatch stands in for glib.IdleAdd in tests that need to
+// control exactly when a dispatched callback runs (AC-2, AC-4, AC-5):
+// dispatch only records fn; it never invokes it until the test does.
+type capturingDispatch struct {
+	calls []func()
+}
+
+func (c *capturingDispatch) dispatch(fn func()) {
+	c.calls = append(c.calls, fn)
+}
+
 // --- AC-1: config path resolution ---
 
 // TestResolveConfigPath references AC-1.
@@ -83,7 +95,7 @@ func TestResolveConfigPath(t *testing.T) {
 	})
 }
 
-// --- AC-2, AC-3: reload / applyConfig decision logic ---
+// --- applyConfig decision logic ---
 
 func sampleConfig() config.Config {
 	return config.Config{
@@ -95,14 +107,18 @@ func sampleConfig() config.Config {
 	}
 }
 
-// TestApplyConfig_SuccessAppliesWindowSectionsAndRunner references AC-2 and
-// AC-3 (successful reload).
+// syncDispatch runs fn immediately; a stand-in for glib.IdleAdd in tests
+// that do not need to control callback timing.
+func syncDispatch(fn func()) { fn() }
+
 func TestApplyConfig_SuccessAppliesWindowSectionsAndRunner(t *testing.T) {
 	cfg := sampleConfig()
 	u := &fakeUI{}
 	r := &fakeRunner{}
+	store := newSectionStore()
+	gens := newGenerationTracker()
 
-	applyConfig(cfg, nil, u, r)
+	applyConfig(cfg, nil, r, store, gens.next(), gens, u, syncDispatch)
 
 	if len(u.configErrors) != 1 || u.configErrors[0] != "" {
 		t.Fatalf("configErrors = %v, want a single cleared banner", u.configErrors)
@@ -139,20 +155,22 @@ func TestApplyConfig_SuccessAppliesWindowSectionsAndRunner(t *testing.T) {
 }
 
 // TestApplyConfig_FailureSetsBannerOnlyAndLeavesEverythingElseUnchanged
-// references AC-2 (startup) and AC-3 (reload failure).
+// references FR9 (last-good behavior).
 func TestApplyConfig_FailureSetsBannerOnlyAndLeavesEverythingElseUnchanged(t *testing.T) {
 	u := &fakeUI{}
 	r := &fakeRunner{}
+	store := newSectionStore()
+	gens := newGenerationTracker()
 
 	// Establish a baseline successful state first, mirroring a reload that
 	// later fails; the failure must change nothing beyond the banner.
-	applyConfig(sampleConfig(), nil, u, r)
+	applyConfig(sampleConfig(), nil, r, store, gens.next(), gens, u, syncDispatch)
 	windowCallsBefore := len(u.windowSettings)
 	sectionCallsBefore := len(u.sections)
 	applyCallsBefore := len(r.applyCalls)
 
 	loadErr := errors.New("config: parse boom")
-	applyConfig(config.Config{}, loadErr, u, r)
+	applyConfig(config.Config{}, loadErr, r, store, gens.next(), gens, u, syncDispatch)
 
 	if len(u.configErrors) != 2 || u.configErrors[1] != loadErr.Error() {
 		t.Fatalf("configErrors = %v, want banner set to %q", u.configErrors, loadErr.Error())
@@ -168,14 +186,16 @@ func TestApplyConfig_FailureSetsBannerOnlyAndLeavesEverythingElseUnchanged(t *te
 	}
 }
 
-// TestApplyConfig_StartupFailureOnlySetsBanner references AC-2 directly: an
-// unloadable config at startup (no prior successful load) sets only the
-// banner, leaving the UI in its already-empty initial state.
+// TestApplyConfig_StartupFailureOnlySetsBanner: an unloadable config at
+// startup (no prior successful load) sets only the banner, leaving the UI
+// in its already-empty initial state.
 func TestApplyConfig_StartupFailureOnlySetsBanner(t *testing.T) {
 	u := &fakeUI{}
 	r := &fakeRunner{}
+	store := newSectionStore()
+	gens := newGenerationTracker()
 
-	applyConfig(config.Config{}, errors.New("boom"), u, r)
+	applyConfig(config.Config{}, errors.New("boom"), r, store, gens.next(), gens, u, syncDispatch)
 
 	if len(u.configErrors) != 1 || u.configErrors[0] != "boom" {
 		t.Fatalf("configErrors = %v, want [\"boom\"]", u.configErrors)
@@ -186,9 +206,236 @@ func TestApplyConfig_StartupFailureOnlySetsBanner(t *testing.T) {
 	}
 }
 
-// --- AC-4: runner event translation and dispatch ---
+// --- AC-1: rehydration from the presentation store ---
 
-// TestTranslateEvent references AC-4.
+// TestApplyConfig_RehydratesFromStoreAfterSetSections references AC-1: a
+// style-only reload (SetSections rebuilds the section widgets) restores an
+// interval section's last output and a failed section's error display
+// immediately, from the presentation store — not from the runner, which
+// retains neither.
+func TestApplyConfig_RehydratesFromStoreAfterSetSections(t *testing.T) {
+	cfg := sampleConfig()
+	intervalKey := cfg.Sections[0].Key()
+	streamKey := cfg.Sections[1].Key()
+
+	store := newSectionStore()
+	store.set(intervalKey, "<b>12:00:00</b>", false)
+	store.set(streamKey, "boom: command not found", true)
+
+	u := &fakeUI{}
+	r := &fakeRunner{} // snapshots left nil: proves rehydration does not depend on Runner.Snapshot
+	gens := newGenerationTracker()
+
+	applyConfig(cfg, nil, r, store, gens.next(), gens, u, syncDispatch)
+
+	want := []sectionUpdate{
+		{key: intervalKey, markup: "<b>12:00:00</b>", isError: false},
+		{key: streamKey, markup: "boom: command not found", isError: true},
+	}
+	if !reflect.DeepEqual(u.updates, want) {
+		t.Errorf("rehydration updates = %+v, want %+v", u.updates, want)
+	}
+}
+
+// TestApplyConfig_NoRehydrationWhenStoreHasNoRecordedState covers a
+// section with no prior store entry (never rendered yet): it must be left
+// alone, filling in on the next run/event as before.
+func TestApplyConfig_NoRehydrationWhenStoreHasNoRecordedState(t *testing.T) {
+	cfg := sampleConfig()
+	u := &fakeUI{}
+	r := &fakeRunner{}
+	store := newSectionStore()
+	gens := newGenerationTracker()
+
+	applyConfig(cfg, nil, r, store, gens.next(), gens, u, syncDispatch)
+
+	if len(u.updates) != 0 {
+		t.Errorf("updates = %+v, want none (store has no recorded state for any section)", u.updates)
+	}
+}
+
+// --- AC-4: reconcile off the dispatched path ---
+
+// TestApplyConfig_RunnerReconcileHappensBeforeUIDispatch references AC-4:
+// runner.Apply and the view-model/rehydration computation happen
+// synchronously — before dispatch's callback is ever invoked — proving
+// that work runs off whatever dispatch represents (the GTK main loop in
+// production); only the UI method calls themselves wait behind dispatch.
+func TestApplyConfig_RunnerReconcileHappensBeforeUIDispatch(t *testing.T) {
+	cfg := sampleConfig()
+	u := &fakeUI{}
+	r := &fakeRunner{}
+	store := newSectionStore()
+	gens := newGenerationTracker()
+	capture := &capturingDispatch{}
+
+	applyConfig(cfg, nil, r, store, gens.next(), gens, u, capture.dispatch)
+
+	if len(r.applyCalls) != 1 {
+		t.Fatalf("runner.Apply calls = %d, want 1 (reconcile must not wait for dispatch)", len(r.applyCalls))
+	}
+	if len(u.windowSettings) != 0 || len(u.sections) != 0 {
+		t.Fatalf("UI mutated before dispatch ran: windowSettings=%v sections=%v", u.windowSettings, u.sections)
+	}
+	if len(capture.calls) != 1 {
+		t.Fatalf("dispatch calls = %d, want 1", len(capture.calls))
+	}
+
+	capture.calls[0]()
+
+	if len(u.windowSettings) != 1 || len(u.sections) != 1 {
+		t.Errorf("UI not updated after dispatch ran: windowSettings=%v sections=%v", u.windowSettings, u.sections)
+	}
+}
+
+// TestApplyConfig_FailurePathOnlyDispatchesTheBanner references AC-4 for
+// the failure branch: nothing runs before dispatch (there is no runner
+// reconcile on failure), and only the banner call is behind it.
+func TestApplyConfig_FailurePathOnlyDispatchesTheBanner(t *testing.T) {
+	u := &fakeUI{}
+	r := &fakeRunner{}
+	store := newSectionStore()
+	gens := newGenerationTracker()
+	capture := &capturingDispatch{}
+
+	applyConfig(config.Config{}, errors.New("boom"), r, store, gens.next(), gens, u, capture.dispatch)
+
+	if len(u.configErrors) != 0 {
+		t.Fatalf("configErrors = %v before dispatch ran, want none", u.configErrors)
+	}
+	if len(capture.calls) != 1 {
+		t.Fatalf("dispatch calls = %d, want 1", len(capture.calls))
+	}
+
+	capture.calls[0]()
+
+	if len(u.configErrors) != 1 || u.configErrors[0] != "boom" {
+		t.Errorf("configErrors after dispatch ran = %v, want [\"boom\"]", u.configErrors)
+	}
+}
+
+// --- AC-5: stale-generation protection ---
+
+// TestApplyConfig_StaleGenerationDoesNotOverwriteNewer references AC-5: an
+// older reload's dispatched callback completing after a newer one has
+// already applied must not overwrite the newer state.
+func TestApplyConfig_StaleGenerationDoesNotOverwriteNewer(t *testing.T) {
+	u := &fakeUI{}
+	r := &fakeRunner{}
+	store := newSectionStore()
+	gens := newGenerationTracker()
+
+	oldCfg := config.Config{Window: config.Window{Width: 100, Height: 100}}
+	newCfg := config.Config{Window: config.Window{Width: 999, Height: 999}}
+
+	oldGen := gens.next()
+	newGen := gens.next()
+
+	var oldCB, newCB func()
+	applyConfig(oldCfg, nil, r, store, oldGen, gens, u, func(fn func()) { oldCB = fn })
+	applyConfig(newCfg, nil, r, store, newGen, gens, u, func(fn func()) { newCB = fn })
+
+	// The newer reload's callback happens to run first.
+	newCB()
+	if len(u.windowSettings) != 1 || u.windowSettings[0].Width != 999 {
+		t.Fatalf("windowSettings after newer callback = %+v, want a single 999-width entry", u.windowSettings)
+	}
+
+	// The older (stale) reload's callback arrives after — must be a no-op.
+	oldCB()
+	if len(u.windowSettings) != 1 {
+		t.Errorf("stale reload overwrote newer state: windowSettings = %+v, want unchanged (still length 1)", u.windowSettings)
+	}
+}
+
+// TestGenerationTracker_NewerAppliedFirstBlocksOlder is a focused unit
+// test of generationTracker itself, references AC-5.
+func TestGenerationTracker_NewerAppliedFirstBlocksOlder(t *testing.T) {
+	gens := newGenerationTracker()
+	older := gens.next()
+	newer := gens.next()
+
+	if !gens.markApplied(newer) {
+		t.Fatal("markApplied(newer) = false, want true (first apply always succeeds)")
+	}
+	if gens.markApplied(older) {
+		t.Error("markApplied(older) = true after a newer generation applied, want false")
+	}
+}
+
+func TestGenerationTracker_AppliesInOrderWhenNoRaceOccurs(t *testing.T) {
+	gens := newGenerationTracker()
+	first := gens.next()
+	second := gens.next()
+
+	if !gens.markApplied(first) {
+		t.Fatal("markApplied(first) = false, want true")
+	}
+	if !gens.markApplied(second) {
+		t.Error("markApplied(second) = false, want true (strictly newer than the last applied)")
+	}
+}
+
+// --- AC-6: reload() reads holder as its authoritative source ---
+
+// TestReload_UsesHolderAsAuthoritativeSource references AC-6: reload's UI
+// projection is derived from holder.Config()/holder.Err(), read back after
+// Update, rather than from a separate write-only local copy of the load
+// result.
+func TestReload_UsesHolderAsAuthoritativeSource(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(path, []byte("window:\n  width: 111\n  height: 222\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	holder := config.NewHolder()
+	u := &fakeUI{}
+	r := &fakeRunner{}
+	store := newSectionStore()
+	gens := newGenerationTracker()
+
+	var captured func()
+	reload(path, holder, r, store, gens.next(), gens, u, func(fn func()) { captured = fn })
+	captured()
+
+	if err := holder.Err(); err != nil {
+		t.Fatalf("holder.Err() = %v, want nil", err)
+	}
+	if got := holder.Config().Window.Width; got != 111 {
+		t.Fatalf("holder.Config().Window.Width = %d, want 111", got)
+	}
+	if len(u.windowSettings) != 1 || u.windowSettings[0].Width != 111 {
+		t.Errorf("windowSettings = %+v, want width 111 (sourced from holder.Config())", u.windowSettings)
+	}
+}
+
+// TestReload_FailedLoadSetsBannerFromHolderError references AC-6: a failed
+// load's banner message comes from holder.Err() after Update.
+func TestReload_FailedLoadSetsBannerFromHolderError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "missing.yaml")
+
+	holder := config.NewHolder()
+	u := &fakeUI{}
+	r := &fakeRunner{}
+	store := newSectionStore()
+	gens := newGenerationTracker()
+
+	var captured func()
+	reload(path, holder, r, store, gens.next(), gens, u, func(fn func()) { captured = fn })
+	captured()
+
+	if holder.Err() == nil {
+		t.Fatal("holder.Err() = nil, want the load failure recorded")
+	}
+	if len(u.configErrors) != 1 || u.configErrors[0] != holder.Err().Error() {
+		t.Errorf("configErrors = %v, want [%q] (sourced from holder.Err())", u.configErrors, holder.Err().Error())
+	}
+}
+
+// --- runner event translation and dispatch ---
+
+// TestTranslateEvent covers translateEvent's per-Kind mapping.
 func TestTranslateEvent(t *testing.T) {
 	snapshot := func(key string) []string {
 		return map[string][]string{
@@ -249,9 +496,9 @@ func TestTranslateEvent(t *testing.T) {
 	}
 }
 
-// TestConsumeEvents_DispatchesTranslatedUpdates references AC-4: each event
-// reaches the UI through the injected dispatch function (a stand-in for
-// glib.IdleAdd), translated and targeted at only its own section key.
+// TestConsumeEvents_DispatchesTranslatedUpdates: each event reaches the UI
+// through the injected dispatch function (a stand-in for glib.IdleAdd),
+// translated and targeted at only its own section key.
 func TestConsumeEvents_DispatchesTranslatedUpdates(t *testing.T) {
 	events := make(chan runner.Event, 3)
 	events <- runner.Event{SectionKey: "a", Kind: runner.KindReplace, Text: "hello"}
@@ -260,14 +507,15 @@ func TestConsumeEvents_DispatchesTranslatedUpdates(t *testing.T) {
 
 	snapshot := func(string) []string { return nil }
 	u := &fakeUI{}
+	store := newSectionStore()
 
 	var dispatchCount int
-	syncDispatch := func(fn func()) {
+	countingDispatch := func(fn func()) {
 		dispatchCount++
 		fn()
 	}
 
-	consumeEvents(events, snapshot, u, syncDispatch)
+	consumeEvents(events, snapshot, u, store, countingDispatch)
 
 	if dispatchCount != 2 {
 		t.Fatalf("dispatch called %d times, want 2", dispatchCount)
@@ -281,7 +529,142 @@ func TestConsumeEvents_DispatchesTranslatedUpdates(t *testing.T) {
 	}
 }
 
-// --- AC-5: shutdown ordering ---
+// TestConsumeEvents_WritesToStore references AC-1's write side: every
+// dispatched update must land in the presentation store under its
+// section's key, for the reload path to read back later.
+func TestConsumeEvents_WritesToStore(t *testing.T) {
+	events := make(chan runner.Event, 1)
+	events <- runner.Event{SectionKey: "clock-key", Kind: runner.KindReplace, Text: "12:00"}
+	close(events)
+
+	u := &fakeUI{}
+	store := newSectionStore()
+
+	consumeEvents(events, func(string) []string { return nil }, u, store, syncDispatch)
+
+	st, ok := store.get("clock-key")
+	if !ok || st.text != "12:00" || st.isError {
+		t.Errorf("store.get(%q) = %+v, %v, want {text: \"12:00\", isError: false}, true", "clock-key", st, ok)
+	}
+}
+
+// --- AC-2: error preservation across coalescing ---
+
+// TestConsumeEvents_ErrorIsRenderedBeforeALaterSuccessTakesItsPlace
+// references AC-2: a success event for the same section arriving before
+// the error's dispatch callback has run must not silently discard the
+// error — the error is rendered first, and the success is rendered after.
+func TestConsumeEvents_ErrorIsRenderedBeforeALaterSuccessTakesItsPlace(t *testing.T) {
+	events := make(chan runner.Event, 2)
+	events <- runner.Event{SectionKey: "a", Kind: runner.KindError, Text: "boom"}
+	events <- runner.Event{SectionKey: "a", Kind: runner.KindReplace, Text: "ok again"}
+	close(events)
+
+	u := &fakeUI{}
+	store := newSectionStore()
+	capture := &capturingDispatch{}
+
+	consumeEvents(events, func(string) []string { return nil }, u, store, capture.dispatch)
+
+	if len(capture.calls) != 1 {
+		t.Fatalf("dispatch calls after both events received = %d, want 1 (error still pending; success queued behind it, not a second callback yet)", len(capture.calls))
+	}
+	if len(u.updates) != 0 {
+		t.Fatalf("UpdateSection called before any dispatch callback ran: %+v", u.updates)
+	}
+
+	capture.calls[0]() // renders the error, then reschedules the queued success
+
+	if len(capture.calls) != 2 {
+		t.Fatalf("dispatch calls after running the first callback = %d, want 2 (queued success rescheduled)", len(capture.calls))
+	}
+	if len(u.updates) != 1 || !u.updates[0].isError {
+		t.Fatalf("updates after first callback = %+v, want exactly the error rendered", u.updates)
+	}
+
+	capture.calls[1]()
+
+	want := []sectionUpdate{
+		{key: "a", markup: "boom", isError: true},
+		{key: "a", markup: "ok again", isError: false},
+	}
+	if !reflect.DeepEqual(u.updates, want) {
+		t.Errorf("updates = %+v, want %+v (error rendered at least once, before the success)", u.updates, want)
+	}
+}
+
+// TestConsumeEvents_SuccessEventsCoalesceIntoOneCallback covers the
+// ordinary (non-error) coalescing path still bounded to one pending
+// dispatch callback per section.
+func TestConsumeEvents_SuccessEventsCoalesceIntoOneCallback(t *testing.T) {
+	events := make(chan runner.Event, 3)
+	events <- runner.Event{SectionKey: "a", Kind: runner.KindReplace, Text: "one"}
+	events <- runner.Event{SectionKey: "a", Kind: runner.KindReplace, Text: "two"}
+	events <- runner.Event{SectionKey: "a", Kind: runner.KindReplace, Text: "three"}
+	close(events)
+
+	u := &fakeUI{}
+	store := newSectionStore()
+	capture := &capturingDispatch{}
+
+	consumeEvents(events, func(string) []string { return nil }, u, store, capture.dispatch)
+
+	if len(capture.calls) != 1 {
+		t.Fatalf("dispatch calls = %d, want 1 (three same-section events coalesce)", len(capture.calls))
+	}
+
+	capture.calls[0]()
+
+	want := []sectionUpdate{{key: "a", markup: "three", isError: false}}
+	if !reflect.DeepEqual(u.updates, want) {
+		t.Errorf("updates = %+v, want %+v (only the latest coalesced event is rendered)", u.updates, want)
+	}
+}
+
+// --- AC-3: render/snapshot at dispatch time, not receive time ---
+
+// TestConsumeEvents_RendersOnlyAtDispatchTime references AC-3: rapid
+// events for one section coalesce into a single pending dispatch callback,
+// and the snapshot (part of the render pipeline) only runs when that
+// callback actually fires — never at receive time — so dropped
+// intermediate events incur no render.
+func TestConsumeEvents_RendersOnlyAtDispatchTime(t *testing.T) {
+	events := make(chan runner.Event, 3)
+	events <- runner.Event{SectionKey: "s", Kind: runner.KindAppend, Text: "line one"}
+	events <- runner.Event{SectionKey: "s", Kind: runner.KindAppend, Text: "line two"}
+	events <- runner.Event{SectionKey: "s", Kind: runner.KindAppend, Text: "line three"}
+	close(events)
+
+	u := &fakeUI{}
+	store := newSectionStore()
+	capture := &capturingDispatch{}
+	var snapshotCalls int
+	snapshot := func(string) []string {
+		snapshotCalls++
+		return []string{"line one", "line two", "line three"}
+	}
+
+	consumeEvents(events, snapshot, u, store, capture.dispatch)
+
+	if snapshotCalls != 0 {
+		t.Fatalf("snapshot called %d times before any dispatch callback ran, want 0 (render must not happen at receive time)", snapshotCalls)
+	}
+	if len(capture.calls) != 1 {
+		t.Fatalf("dispatch calls = %d, want 1 (three events coalesce into one pending callback)", len(capture.calls))
+	}
+
+	capture.calls[0]()
+
+	if snapshotCalls != 1 {
+		t.Errorf("snapshot called %d times after the single dispatch callback ran, want exactly 1", snapshotCalls)
+	}
+	want := []sectionUpdate{{key: "s", markup: "line one\nline two\nline three", isError: false}}
+	if !reflect.DeepEqual(u.updates, want) {
+		t.Errorf("updates = %+v, want %+v", u.updates, want)
+	}
+}
+
+// --- shutdown ordering ---
 
 type orderRecorder struct {
 	mu    sync.Mutex
@@ -309,7 +692,8 @@ func (r *orderedRunner) Stop()                                 { r.rec.record("r
 func (r *orderedRunner) Events() <-chan runner.Event           { return nil }
 func (r *orderedRunner) Snapshot(key string) []string          { return nil }
 
-// TestApp_Quit_StopsWatcherThenRunnerAndIsIdempotent references AC-5.
+// TestApp_Quit_StopsWatcherThenRunnerAndIsIdempotent covers App.Quit's
+// shutdown ordering (FR8).
 func TestApp_Quit_StopsWatcherThenRunnerAndIsIdempotent(t *testing.T) {
 	rec := &orderRecorder{}
 	a := &App{

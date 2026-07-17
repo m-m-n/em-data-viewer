@@ -1,66 +1,140 @@
 package app
 
 import (
-	"strings"
+	"sync"
 
 	"data-viewer/internal/config"
-	"data-viewer/internal/markup"
 	"data-viewer/internal/runner"
 	"data-viewer/internal/ui"
 )
 
-// reload performs one config (re)load cycle: load from path, record the
-// outcome in holder (last-good retention across failed reloads), and apply
-// the result to the UI/runner.
-func reload(path string, holder *config.Holder, u UI, r Runner) {
-	cfg, err := config.Load(path)
-	holder.Update(cfg, err)
-	applyConfig(cfg, err, u, r)
+// generationTracker guards the dispatched UI-projection callback against a
+// stale reload overwriting a newer one that has already been applied
+// (Rework Round 1: reload pipeline, AC-5). Every triggered reload is
+// assigned an increasing generation number (via next) before its
+// off-main-loop work starts, so generation order reflects trigger order
+// regardless of how long each reload's work takes; markApplied then lets
+// only the highest generation seen so far actually reach the UI.
+type generationTracker struct {
+	mu      sync.Mutex
+	counter uint64
+	applied uint64
 }
 
-// applyConfig translates one load outcome into UI/runner side effects
-// (AC-2, AC-3): on success, it clears the banner and applies the window
-// settings, section view models and section list (to the runner) derived
-// from cfg; on failure, it only sets the banner — window, sections and the
-// runner's section list are left exactly as they were (last-good
-// behavior, FR9).
-func applyConfig(cfg config.Config, err error, u UI, r Runner) {
+// newGenerationTracker returns a tracker with no generation issued or
+// applied yet.
+func newGenerationTracker() *generationTracker {
+	return &generationTracker{}
+}
+
+// next returns the next generation number. Call it once per triggered
+// reload, before starting its (possibly slow) off-main-loop work, so
+// generation order reflects trigger order.
+func (g *generationTracker) next() uint64 {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.counter++
+	return g.counter
+}
+
+// markApplied reports whether gen may be applied to the UI: false if a
+// newer generation has already been applied (gen arrived stale — an older
+// reload completing after a newer one, AC-5), in which case the caller
+// must skip its UI mutations entirely; true otherwise, recording gen as
+// the new high-water mark.
+func (g *generationTracker) markApplied(gen uint64) bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if gen < g.applied {
+		return false
+	}
+	g.applied = gen
+	return true
+}
+
+// reload performs one config (re)load cycle (Rework Round 1: reload
+// pipeline). Loading the file and updating holder happen on the calling
+// goroutine — the watcher goroutine, or Run's startup goroutine — never
+// the GTK main loop; holder becomes the single authoritative source read
+// immediately after (its Config/Err, not the local load result), so it is
+// never a write-only duplicate (AC-6). The rest of the work is delegated
+// to applyConfig.
+func reload(path string, holder *config.Holder, r Runner, store *sectionStore, gen uint64, gens *generationTracker, u UI, dispatch func(func())) {
+	cfg, err := config.Load(path)
+	holder.Update(cfg, err)
+	applyConfig(holder.Config(), holder.Err(), r, store, gen, gens, u, dispatch)
+}
+
+// applyConfig translates one load outcome into runner/UI side effects
+// (FR9, AC-4): on failure, only a banner update is dispatched — window,
+// sections and the runner's section list are left exactly as they were
+// (last-good behavior). On success, the runner is reconciled and the
+// rehydration data is computed immediately, on the calling goroutine, off
+// the GTK main loop; only the resulting UI projection (banner clear,
+// window settings, section view models, rehydration updates) is handed to
+// dispatch, gated by gens.markApplied so a stale reload cannot overwrite a
+// newer one (AC-5).
+func applyConfig(cfg config.Config, err error, r Runner, store *sectionStore, gen uint64, gens *generationTracker, u UI, dispatch func(func())) {
 	if err != nil {
-		u.SetConfigError(err.Error())
+		dispatch(func() {
+			if !gens.markApplied(gen) {
+				return
+			}
+			u.SetConfigError(err.Error())
+		})
 		return
 	}
 
-	u.SetConfigError("")
-	u.ApplyWindow(ui.WindowSettings{
+	r.Apply(runnerSections(cfg.Sections))
+	sections := sectionViewModels(cfg.Sections)
+	rehydrations := rehydrationsFor(cfg.Sections, store)
+	window := ui.WindowSettings{
 		Width:  cfg.Window.Width,
 		Height: cfg.Window.Height,
 		Style:  cfg.Window.Style,
+	}
+
+	dispatch(func() {
+		if !gens.markApplied(gen) {
+			return
+		}
+		u.SetConfigError("")
+		u.ApplyWindow(window)
+		u.SetSections(sections)
+		for _, rh := range rehydrations {
+			u.UpdateSection(rh.key, rh.text, rh.isError)
+		}
 	})
-	u.SetSections(sectionViewModels(cfg.Sections))
-	r.Apply(runnerSections(cfg.Sections))
-	rehydrateSections(cfg.Sections, u, r)
 }
 
-// rehydrateSections re-populates the freshly (re)created section widgets
-// from the runner's retained per-section state immediately after
-// SetSections, closing the blank window a style-only reload would
-// otherwise leave until the next runner event. It uses the same
-// render convention as the append event path (events.go's
-// translateEvent/KindAppend): join the runner's buffered lines and pass
-// them through markup.Render before UpdateSection. Sections with no
-// retained content (e.g. an interval section's last output, which the
-// runner does not retain between runs) are left untouched; they fill in
-// on the next run/event as before.
-func rehydrateSections(sections []config.SectionConfig, u UI, r Runner) {
+// sectionRehydration is one section's presentation-store state to
+// re-apply to a freshly (re)created widget immediately after SetSections.
+type sectionRehydration struct {
+	key     string
+	text    string
+	isError bool
+}
+
+// rehydrationsFor computes the UI updates needed to restore section
+// content that SetSections' widget rebuild would otherwise leave blank
+// until the next runner event: the presentation store's last rendered
+// state per section key (AC-1) — this covers an interval section's last
+// output and a failed section's terminal error display, neither of which
+// the runner itself retains between runs (unlike a stream section's
+// buffer, read via Runner.Snapshot in events.go). Sections with no
+// recorded state are left out; they fill in on the next run/event as
+// before.
+func rehydrationsFor(sections []config.SectionConfig, store *sectionStore) []sectionRehydration {
+	var out []sectionRehydration
 	for _, s := range sections {
 		key := s.Key()
-		lines := r.Snapshot(key)
-		if len(lines) == 0 {
+		st, ok := store.get(key)
+		if !ok {
 			continue
 		}
-		rendered, _ := markup.Render(strings.Join(lines, "\n"))
-		u.UpdateSection(key, rendered, false)
+		out = append(out, sectionRehydration{key: key, text: st.text, isError: st.isError})
 	}
+	return out
 }
 
 // sectionViewModels translates config sections into UI view models,
