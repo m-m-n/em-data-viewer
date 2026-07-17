@@ -2,8 +2,12 @@ package ui
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 // TestMergeStyle_AppliesOverridesPerKey references AC-1: user config values
@@ -172,5 +176,281 @@ func TestBuildStylesheet_IncludesWindowAndEverySection(t *testing.T) {
 	}
 	if !strings.Contains(css, "color: #123456;") {
 		t.Errorf("buildStylesheet() did not apply section 2's override: %q", css)
+	}
+}
+
+// --- SPEC key -> internal key translation (rework round 1, task0006) ---
+
+// TestMergeStyle_SectionSpecKeysChangeOutputFontAndColor references AC-1:
+// the SPEC schema example {font: "monospace 12", color: "#ffffff"} changes
+// the rendered output font/color away from the defaults.
+func TestMergeStyle_SectionSpecKeysChangeOutputFontAndColor(t *testing.T) {
+	got := MergeStyle(SectionStyleDefaults, map[string]string{
+		"font":  "serif 14",
+		"color": "#ffffff",
+	})
+
+	if got["output-font"] != "serif" {
+		t.Errorf("output-font = %q, want %q (translated from SPEC font key)", got["output-font"], "serif")
+	}
+	if got["output-size"] != "14pt" {
+		t.Errorf("output-size = %q, want %q (translated from SPEC font key)", got["output-size"], "14pt")
+	}
+	if got["output-color"] != "#ffffff" {
+		t.Errorf("output-color = %q, want %q (translated from SPEC color key)", got["output-color"], "#ffffff")
+	}
+	// Label styling is untouched by section-level SPEC keys.
+	if got["label-color"] != SectionStyleDefaults["label-color"] {
+		t.Errorf("label-color = %q, want default %q (SPEC keys must not affect label styling)", got["label-color"], SectionStyleDefaults["label-color"])
+	}
+}
+
+// TestMergeStyle_WindowSpecKeysChangeFrameColorAndWidth references AC-2:
+// the SPEC schema example {border_color: "#ff0000", border_width: 2}
+// changes the frame color and width values produced by the style logic.
+func TestMergeStyle_WindowSpecKeysChangeFrameColorAndWidth(t *testing.T) {
+	got := MergeStyle(WindowStyleDefaults, map[string]string{
+		"border_color": "#ff0000",
+		"border_width": "2",
+	})
+
+	if got["frame"] != "#ff0000" {
+		t.Errorf("frame = %q, want %q (translated from SPEC border_color key)", got["frame"], "#ff0000")
+	}
+	if got["frame-width"] != "2px" {
+		t.Errorf("frame-width = %q, want %q (translated from SPEC border_width key)", got["frame-width"], "2px")
+	}
+}
+
+// TestMergeStyle_WindowSpecBackgroundKeyAppliesDirectly checks that the
+// window "background" SPEC key needs no alias translation: the SPEC name
+// and the internal name are identical (AC-2).
+func TestMergeStyle_WindowSpecBackgroundKeyAppliesDirectly(t *testing.T) {
+	got := MergeStyle(WindowStyleDefaults, map[string]string{"background": "#000000ff"})
+
+	if got["background"] != "#000000ff" {
+		t.Errorf("background = %q, want %q", got["background"], "#000000ff")
+	}
+}
+
+// TestNormalizeLength_NumericOnlyBecomesPixels references AC-3: bare
+// numbers are interpreted as pixels; values that already carry a unit (or
+// anything unparsable as a bare number) pass through unchanged.
+func TestNormalizeLength_NumericOnlyBecomesPixels(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "bare integer", in: "2", want: "2px"},
+		{name: "bare decimal", in: "1.5", want: "1.5px"},
+		{name: "zero", in: "0", want: "0px"},
+		{name: "already has px unit", in: "3px", want: "3px"},
+		{name: "already has other unit", in: "0.5em", want: "0.5em"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := normalizeLength(tc.in); got != tc.want {
+				t.Errorf("normalizeLength(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestMergeStyle_SpecKeyWinsOverConflictingInternalKey references AC-4:
+// when both a SPEC key and its internal equivalent are present, the SPEC
+// key wins.
+func TestMergeStyle_SpecKeyWinsOverConflictingInternalKey(t *testing.T) {
+	windowGot := MergeStyle(WindowStyleDefaults, map[string]string{
+		"frame":        "#111111",
+		"border_color": "#ff0000",
+	})
+	if windowGot["frame"] != "#ff0000" {
+		t.Errorf("frame = %q, want %q (SPEC border_color must win over internal frame)", windowGot["frame"], "#ff0000")
+	}
+
+	sectionGot := MergeStyle(SectionStyleDefaults, map[string]string{
+		"output-color": "#111111",
+		"color":        "#ffffff",
+	})
+	if sectionGot["output-color"] != "#ffffff" {
+		t.Errorf("output-color = %q, want %q (SPEC color must win over internal output-color)", sectionGot["output-color"], "#ffffff")
+	}
+}
+
+// TestMergeStyle_ExistingInternalKeysStillWorkWithoutSpecEquivalent
+// references AC-4: internal keys with no SPEC alias present keep working
+// unchanged.
+func TestMergeStyle_ExistingInternalKeysStillWorkWithoutSpecEquivalent(t *testing.T) {
+	got := MergeStyle(WindowStyleDefaults, map[string]string{"radius": "0px"})
+	if got["radius"] != "0px" {
+		t.Errorf("radius = %q, want %q", got["radius"], "0px")
+	}
+
+	gotSection := MergeStyle(SectionStyleDefaults, map[string]string{"label-color": "#ffffff"})
+	if gotSection["label-color"] != "#ffffff" {
+		t.Errorf("label-color = %q, want %q", gotSection["label-color"], "#ffffff")
+	}
+}
+
+// TestMergeStyle_EmptySpecValueFallsBackToDefault covers the "SPEC key with
+// empty value" edge row: an empty override must not clobber the default
+// with an empty (invalid) CSS value.
+func TestMergeStyle_EmptySpecValueFallsBackToDefault(t *testing.T) {
+	got := MergeStyle(WindowStyleDefaults, map[string]string{"border_color": "", "border_width": ""})
+
+	if got["frame"] != WindowStyleDefaults["frame"] {
+		t.Errorf("frame = %q, want default %q when border_color is empty", got["frame"], WindowStyleDefaults["frame"])
+	}
+	if got["frame-width"] != WindowStyleDefaults["frame-width"] {
+		t.Errorf("frame-width = %q, want default %q when border_width is empty", got["frame-width"], WindowStyleDefaults["frame-width"])
+	}
+}
+
+// TestMergeStyle_EmptyStyleMapReturnsDefaults covers the "empty style map"
+// edge row for both window and section defaults.
+func TestMergeStyle_EmptyStyleMapReturnsDefaults(t *testing.T) {
+	gotWindow := MergeStyle(WindowStyleDefaults, map[string]string{})
+	for k, want := range WindowStyleDefaults {
+		if gotWindow[k] != want {
+			t.Errorf("MergeStyle(WindowStyleDefaults, {})[%q] = %q, want default %q", k, gotWindow[k], want)
+		}
+	}
+
+	gotSection := MergeStyle(SectionStyleDefaults, map[string]string{})
+	for k, want := range SectionStyleDefaults {
+		if gotSection[k] != want {
+			t.Errorf("MergeStyle(SectionStyleDefaults, {})[%q] = %q, want default %q", k, gotSection[k], want)
+		}
+	}
+}
+
+// TestParseFontDescription_UnparsableFallsBackWithoutError covers the
+// "unparsable font string" edge row: a font description without a
+// trailing bare-number size is reported as unparsable rather than
+// producing a garbage size, and MergeStyle then leaves the defaults in
+// place instead of erroring.
+func TestParseFontDescription_UnparsableFallsBackWithoutError(t *testing.T) {
+	cases := []string{"monospace", "monospace bold", ""}
+	for _, in := range cases {
+		t.Run(fmt.Sprintf("%q", in), func(t *testing.T) {
+			if _, _, ok := parseFontDescription(in); ok {
+				t.Errorf("parseFontDescription(%q) reported ok=true, want unparsable", in)
+			}
+		})
+	}
+
+	got := MergeStyle(SectionStyleDefaults, map[string]string{"font": "monospace"})
+	if got["output-font"] != SectionStyleDefaults["output-font"] {
+		t.Errorf("output-font = %q, want default %q for unparsable font string", got["output-font"], SectionStyleDefaults["output-font"])
+	}
+	if got["output-size"] != SectionStyleDefaults["output-size"] {
+		t.Errorf("output-size = %q, want default %q for unparsable font string", got["output-size"], SectionStyleDefaults["output-size"])
+	}
+}
+
+// TestParseFontDescription_SplitsFamilyAndSize checks multi-word families
+// split correctly, with the trailing bare number becoming a pt size.
+func TestParseFontDescription_SplitsFamilyAndSize(t *testing.T) {
+	family, size, ok := parseFontDescription("DejaVu Sans Mono 10")
+	if !ok {
+		t.Fatalf("parseFontDescription() reported unparsable for a valid description")
+	}
+	if family != "DejaVu Sans Mono" {
+		t.Errorf("family = %q, want %q", family, "DejaVu Sans Mono")
+	}
+	if size != "10pt" {
+		t.Errorf("size = %q, want %q", size, "10pt")
+	}
+}
+
+// --- Drift guard (AC-5): defaults table vs design-system/tokens.yaml ---
+
+type tokenEntry struct {
+	Value string `yaml:"value"`
+}
+
+type typographyValue struct {
+	Family string `yaml:"family"`
+	Size   string `yaml:"size"`
+}
+
+type typographyEntry struct {
+	Value typographyValue `yaml:"value"`
+}
+
+type designTokens struct {
+	Color struct {
+		Surface      tokenEntry `yaml:"surface"`
+		OnSurface    tokenEntry `yaml:"on-surface"`
+		OnSurfaceDim tokenEntry `yaml:"on-surface-dim"`
+		Frame        tokenEntry `yaml:"frame"`
+		Error        tokenEntry `yaml:"error"`
+		ErrorSurface tokenEntry `yaml:"error-surface"`
+	} `yaml:"color"`
+	Typography struct {
+		Output       typographyEntry `yaml:"output"`
+		SectionLabel typographyEntry `yaml:"section-label"`
+	} `yaml:"typography"`
+	Spacing struct {
+		Unit tokenEntry `yaml:"unit"`
+	} `yaml:"spacing"`
+	Radius struct {
+		Window tokenEntry `yaml:"window"`
+	} `yaml:"radius"`
+	Border struct {
+		FrameWidth tokenEntry `yaml:"frame-width"`
+	} `yaml:"border"`
+}
+
+// TestStyleDefaults_MatchDesignTokens references AC-5: the ui defaults
+// table must match design-system/tokens.yaml so token/runtime drift fails
+// the test suite. go test sets the working directory to the package
+// directory, so the path below reaches the repository root from
+// internal/ui.
+func TestStyleDefaults_MatchDesignTokens(t *testing.T) {
+	path := filepath.Join("..", "..", "design-system", "tokens.yaml")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+
+	var tokens designTokens
+	if err := yaml.Unmarshal(data, &tokens); err != nil {
+		t.Fatalf("parse %s: %v", path, err)
+	}
+
+	wantWindow := map[string]string{
+		"background":       tokens.Color.Surface.Value,
+		"frame":            tokens.Color.Frame.Value,
+		"frame-width":      tokens.Border.FrameWidth.Value,
+		"radius":           tokens.Radius.Window.Value,
+		"error-color":      tokens.Color.Error.Value,
+		"error-background": tokens.Color.ErrorSurface.Value,
+	}
+	for k, want := range wantWindow {
+		if want == "" {
+			t.Fatalf("tokens.yaml did not yield a value for window key %q; check the struct tags", k)
+		}
+		if got := WindowStyleDefaults[k]; got != want {
+			t.Errorf("WindowStyleDefaults[%q] = %q, want %q (design-system/tokens.yaml)", k, got, want)
+		}
+	}
+
+	wantSection := map[string]string{
+		"label-color":  tokens.Color.OnSurfaceDim.Value,
+		"label-font":   tokens.Typography.SectionLabel.Value.Family,
+		"label-size":   tokens.Typography.SectionLabel.Value.Size,
+		"output-color": tokens.Color.OnSurface.Value,
+		"output-font":  tokens.Typography.Output.Value.Family,
+		"output-size":  tokens.Typography.Output.Value.Size,
+	}
+	for k, want := range wantSection {
+		if want == "" {
+			t.Fatalf("tokens.yaml did not yield a value for section key %q; check the struct tags", k)
+		}
+		if got := SectionStyleDefaults[k]; got != want {
+			t.Errorf("SectionStyleDefaults[%q] = %q, want %q (design-system/tokens.yaml)", k, got, want)
+		}
 	}
 }
