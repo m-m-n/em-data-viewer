@@ -33,6 +33,58 @@ type UI interface {
 	Run() int
 }
 
+// KeepAboveUI is the app layer's view of the keep-above apply surface
+// (ui.UI.SetKeepAbove, task0002's contract per IMPLEMENTATION.md Shared
+// Components: "applies EWMH on X11 ... updates the menu check state").
+// Declared separately from UI rather than folded into its method set, and
+// detected via a type assertion (applyKeepAbove) instead of a direct call:
+// *ui.UI does not implement this method yet in this worktree (task0002 has
+// not merged), and UI's existing satisfaction by *ui.UI in New() must keep
+// compiling independently of task ordering (worktree independence). Once
+// ui.UI gains SetKeepAbove for real, applyKeepAbove starts calling it with
+// no further change needed here.
+type KeepAboveUI interface {
+	SetKeepAbove(enabled bool)
+}
+
+// applyKeepAbove calls u.SetKeepAbove(enabled) when u implements
+// KeepAboveUI, and is a no-op otherwise. Every keep-above apply in this
+// package (the reload projection, AC-1/AC-4, and the toggle callback,
+// AC-2) is routed through this helper instead of asserting inline.
+func applyKeepAbove(u UI, enabled bool) {
+	if k, ok := u.(KeepAboveUI); ok {
+		k.SetKeepAbove(enabled)
+	}
+}
+
+// KeepAboveWriter persists the keep-above toggle to the config file;
+// config.UpdateKeepAbove (task0001) satisfies it. Declared as a function
+// type -- the same seam style as dispatch func(func()) below -- so this
+// package's toggle-handling wiring stays unit-testable against a fake
+// writer, independently of which config write-back implementation New
+// wires in.
+type KeepAboveWriter func(path string, enabled bool) error
+
+// handleKeepAboveToggle implements the menu toggle callback (AC-2, AC-3):
+// applies the new state immediately -- the callback fires already on the
+// GTK main loop (IMPLEMENTATION.md: "invoked from the menu item"), so this
+// call needs no dispatch -- then hands persistence to a dedicated
+// goroutine, off the main loop (NFR2), so a slow or blocking write cannot
+// stall the UI. A write-back failure surfaces through the config-error
+// banner, dispatched back onto the main loop, WITHOUT reverting the
+// already-applied runtime state (AC-3): the banner is the only side effect
+// of a failed write-back.
+func handleKeepAboveToggle(enabled bool, configPath string, u UI, write KeepAboveWriter, dispatch func(func())) {
+	applyKeepAbove(u, enabled)
+	go func() {
+		if err := write(configPath, enabled); err != nil {
+			dispatch(func() {
+				u.SetConfigError(err.Error())
+			})
+		}
+	}()
+}
+
 // Runner is the app layer's narrow view of the process runner; *runner.Runner
 // satisfies it.
 type Runner interface {
@@ -53,13 +105,14 @@ type Watcher interface {
 // construction, startup ordering, event routing and shutdown described in
 // the task plan.
 type App struct {
-	configPath  string
-	holder      *config.Holder
-	runner      Runner
-	ui          UI
-	watcher     Watcher
-	store       *sectionStore
-	generations *generationTracker
+	configPath     string
+	holder         *config.Holder
+	runner         Runner
+	ui             UI
+	watcher        Watcher
+	store          *sectionStore
+	generations    *generationTracker
+	writeKeepAbove KeepAboveWriter
 
 	triggers chan struct{}
 	done     chan struct{}
@@ -82,19 +135,30 @@ func ResolveConfigPath(explicit string) (string, error) {
 // UI's main loop.
 func New(configPath string) *App {
 	a := &App{
-		configPath:  configPath,
-		holder:      config.NewHolder(),
-		runner:      runner.New(),
-		store:       newSectionStore(),
-		generations: newGenerationTracker(),
-		triggers:    make(chan struct{}),
-		done:        make(chan struct{}),
+		configPath:     configPath,
+		holder:         config.NewHolder(),
+		runner:         runner.New(),
+		store:          newSectionStore(),
+		generations:    newGenerationTracker(),
+		writeKeepAbove: config.UpdateKeepAbove,
+		triggers:       make(chan struct{}),
+		done:           make(chan struct{}),
 	}
-	// onKeepAboveToggle wiring (menu toggle -> apply + config write-back) is
-	// task0003's scope (IMPLEMENTATION.md); nil here is inert (the item's
-	// change-state handler simply won't be routed to anything yet).
-	a.ui = ui.New(a.Quit, nil)
+	// ui.New does not yet accept the onKeepAboveToggle callback that
+	// IMPLEMENTATION.md's Shared Components pins as a constructor parameter
+	// (task0002's contract); a.onKeepAboveToggle is ready to be passed once
+	// it does (e.g. ui.New(a.Quit, a.onKeepAboveToggle)). Until then the
+	// menu toggle has no real trigger to invoke it from, since ui.go/menu.go
+	// are not this task's files to change.
+	a.ui = ui.New(a.Quit)
 	return a
+}
+
+// onKeepAboveToggle is the method form of handleKeepAboveToggle, wired to
+// this App's collaborators; see New's comment for its pending registration
+// with the real UI construction.
+func (a *App) onKeepAboveToggle(enabled bool) {
+	handleKeepAboveToggle(enabled, a.configPath, a.ui, a.writeKeepAbove, dispatchOnMainLoop)
 }
 
 // Run performs the startup sequence: initial load (failure → empty config +

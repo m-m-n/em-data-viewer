@@ -27,21 +27,40 @@ type fakeUI struct {
 	sections       [][]ui.SectionViewModel
 	updates        []sectionUpdate
 	configErrors   []string
+	keepAboveCalls []bool
+
+	// callOrder records every method call below, in invocation order
+	// (window-drag-keep-above AC-1: "ordering within the projection
+	// verified"). UpdateSection entries are tagged with their section key
+	// since a projection can update several sections.
+	callOrder []string
 }
 
 func (f *fakeUI) ApplyWindow(settings ui.WindowSettings) {
 	f.windowSettings = append(f.windowSettings, settings)
+	f.callOrder = append(f.callOrder, "ApplyWindow")
 }
 func (f *fakeUI) SetSections(sections []ui.SectionViewModel) {
 	f.sections = append(f.sections, sections)
+	f.callOrder = append(f.callOrder, "SetSections")
 }
 func (f *fakeUI) UpdateSection(key, markup string, isError bool) {
 	f.updates = append(f.updates, sectionUpdate{key, markup, isError})
+	f.callOrder = append(f.callOrder, "UpdateSection:"+key)
 }
 func (f *fakeUI) SetConfigError(message string) {
 	f.configErrors = append(f.configErrors, message)
+	f.callOrder = append(f.callOrder, "SetConfigError")
 }
 func (f *fakeUI) Run() int { return 0 }
+
+// SetKeepAbove implements KeepAboveUI (window-drag-keep-above's app-side UI
+// seam extension), letting fakeUI stand in for the real *ui.UI in tests of
+// applyKeepAbove/handleKeepAboveToggle before task0002 lands.
+func (f *fakeUI) SetKeepAbove(enabled bool) {
+	f.keepAboveCalls = append(f.keepAboveCalls, enabled)
+	f.callOrder = append(f.callOrder, "SetKeepAbove")
+}
 
 type fakeRunner struct {
 	applyCalls [][]runner.SectionConfig
@@ -311,6 +330,172 @@ func TestApplyConfig_FailurePathOnlyDispatchesTheBanner(t *testing.T) {
 
 	if len(u.configErrors) != 1 || u.configErrors[0] != "boom" {
 		t.Errorf("configErrors after dispatch ran = %v, want [\"boom\"]", u.configErrors)
+	}
+}
+
+// --- window-drag-keep-above AC-1, AC-4: reload projection routes keep_above ---
+
+// TestApplyConfig_DispatchesSetKeepAboveWithConfigValue references
+// window-drag-keep-above AC-1: a successful reload's dispatched projection
+// calls SetKeepAbove with the config's current value, ordered alongside the
+// other window-level settings (before the section rebuild).
+func TestApplyConfig_DispatchesSetKeepAboveWithConfigValue(t *testing.T) {
+	cfg := sampleConfig()
+	cfg.Window.KeepAbove = true
+	u := &fakeUI{}
+	r := &fakeRunner{}
+	store := newSectionStore()
+	gens := newGenerationTracker()
+
+	applyConfig(cfg, nil, r, store, gens.next(), gens, u, syncDispatch)
+
+	if !reflect.DeepEqual(u.keepAboveCalls, []bool{true}) {
+		t.Fatalf("keepAboveCalls = %v, want [true]", u.keepAboveCalls)
+	}
+	wantOrder := []string{"SetConfigError", "ApplyWindow", "SetKeepAbove", "SetSections"}
+	if !reflect.DeepEqual(u.callOrder, wantOrder) {
+		t.Errorf("callOrder = %v, want %v (SetKeepAbove dispatched alongside window settings, before SetSections)", u.callOrder, wantOrder)
+	}
+}
+
+// TestApplyConfig_KeepAboveFailurePathDoesNotCallSetKeepAbove references
+// FR9/AC-4's interaction with keep_above: a failed load must not call
+// SetKeepAbove at all, matching the existing last-good behavior for window
+// settings and sections.
+func TestApplyConfig_KeepAboveFailurePathDoesNotCallSetKeepAbove(t *testing.T) {
+	u := &fakeUI{}
+	r := &fakeRunner{}
+	store := newSectionStore()
+	gens := newGenerationTracker()
+
+	applyConfig(config.Config{}, errors.New("boom"), r, store, gens.next(), gens, u, syncDispatch)
+
+	if len(u.keepAboveCalls) != 0 {
+		t.Errorf("keepAboveCalls = %v, want none (load failure leaves keep_above untouched)", u.keepAboveCalls)
+	}
+}
+
+// TestApplyConfig_ReloadWithUnchangedKeepAboveValueIsIdempotent references
+// window-drag-keep-above AC-4: two successive reloads carrying the same
+// keep_above value both call SetKeepAbove with that same value -- app.go
+// does not special-case or drop the call when the value is unchanged
+// (idempotency at the visual layer is ui.SetKeepAbove's own responsibility,
+// task0002; this only proves the app layer routes the current value every
+// time, without state churn such as skipping or flipping it).
+func TestApplyConfig_ReloadWithUnchangedKeepAboveValueIsIdempotent(t *testing.T) {
+	cfg := sampleConfig()
+	cfg.Window.KeepAbove = true
+	u := &fakeUI{}
+	r := &fakeRunner{}
+	store := newSectionStore()
+	gens := newGenerationTracker()
+
+	applyConfig(cfg, nil, r, store, gens.next(), gens, u, syncDispatch)
+	applyConfig(cfg, nil, r, store, gens.next(), gens, u, syncDispatch)
+
+	if !reflect.DeepEqual(u.keepAboveCalls, []bool{true, true}) {
+		t.Errorf("keepAboveCalls = %v, want [true true] (same value applied both reloads, no churn)", u.keepAboveCalls)
+	}
+}
+
+// --- window-drag-keep-above AC-2, AC-3: toggle callback ---
+
+// TestHandleKeepAboveToggle_AppliesImmediatelyAndPersistsOffCaller
+// references AC-2: SetKeepAbove is applied before handleKeepAboveToggle
+// returns (the callback already runs on the GTK main loop, so no dispatch
+// is needed for the apply half), and the write-back runs on its own
+// goroutine rather than blocking the caller -- proven by a fake writer that
+// blocks until released, well after handleKeepAboveToggle has returned.
+func TestHandleKeepAboveToggle_AppliesImmediatelyAndPersistsOffCaller(t *testing.T) {
+	u := &fakeUI{}
+	release := make(chan struct{})
+	calledWith := make(chan struct {
+		path    string
+		enabled bool
+	}, 1)
+	write := func(path string, enabled bool) error {
+		calledWith <- struct {
+			path    string
+			enabled bool
+		}{path, enabled}
+		<-release
+		return nil
+	}
+
+	handleKeepAboveToggle(true, "/cfg/config.yaml", u, write, syncDispatch)
+
+	if !reflect.DeepEqual(u.keepAboveCalls, []bool{true}) {
+		t.Fatalf("keepAboveCalls = %v, want [true] applied before handleKeepAboveToggle returned", u.keepAboveCalls)
+	}
+
+	select {
+	case got := <-calledWith:
+		if got.path != "/cfg/config.yaml" || got.enabled != true {
+			t.Errorf("write-back called with (%q, %v), want (\"/cfg/config.yaml\", true)", got.path, got.enabled)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("write-back was never invoked")
+	}
+	// handleKeepAboveToggle already returned above, before write unblocks --
+	// proving it did not wait for the write-back to complete.
+	close(release)
+}
+
+// TestHandleKeepAboveToggle_FailingWriteBackShowsBannerWithoutReverting
+// references AC-3: a failing write-back sets the config-error banner
+// (dispatched, per NFR2) and does not revert the already-applied
+// SetKeepAbove state.
+func TestHandleKeepAboveToggle_FailingWriteBackShowsBannerWithoutReverting(t *testing.T) {
+	u := &fakeUI{}
+	writeErr := errors.New("config: write boom")
+	write := func(path string, enabled bool) error { return writeErr }
+	dispatched := make(chan func(), 1)
+	dispatch := func(fn func()) { dispatched <- fn }
+
+	handleKeepAboveToggle(true, "/cfg/config.yaml", u, write, dispatch)
+
+	var fn func()
+	select {
+	case fn = <-dispatched:
+	case <-time.After(time.Second):
+		t.Fatal("write-back failure was never dispatched")
+	}
+	fn()
+
+	if len(u.configErrors) != 1 || u.configErrors[0] != writeErr.Error() {
+		t.Errorf("configErrors = %v, want [%q]", u.configErrors, writeErr.Error())
+	}
+	if !reflect.DeepEqual(u.keepAboveCalls, []bool{true}) {
+		t.Errorf("keepAboveCalls = %v, want [true] unchanged (a failed write-back must not revert the applied runtime state)", u.keepAboveCalls)
+	}
+}
+
+// TestHandleKeepAboveToggle_SuccessfulWriteBackDoesNotTouchBanner covers the
+// success path of the write-back: no dispatch call at all, so the banner is
+// left alone.
+func TestHandleKeepAboveToggle_SuccessfulWriteBackDoesNotTouchBanner(t *testing.T) {
+	u := &fakeUI{}
+	done := make(chan struct{})
+	write := func(path string, enabled bool) error {
+		close(done)
+		return nil
+	}
+	var dispatchCalls int
+	dispatch := func(fn func()) { dispatchCalls++ }
+
+	handleKeepAboveToggle(false, "/cfg/config.yaml", u, write, dispatch)
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("write-back was never invoked")
+	}
+
+	if dispatchCalls != 0 {
+		t.Errorf("dispatch calls = %d, want 0 (no banner on a successful write-back)", dispatchCalls)
+	}
+	if len(u.configErrors) != 0 {
+		t.Errorf("configErrors = %v, want none", u.configErrors)
 	}
 }
 

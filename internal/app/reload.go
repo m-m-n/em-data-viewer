@@ -71,9 +71,14 @@ func reload(path string, holder *config.Holder, r Runner, store *sectionStore, g
 // (last-good behavior). On success, the runner is reconciled and the
 // rehydration data is computed immediately, on the calling goroutine, off
 // the GTK main loop; only the resulting UI projection (banner clear,
-// window settings, section view models, rehydration updates) is handed to
-// dispatch, gated by gens.markApplied so a stale reload cannot overwrite a
-// newer one (AC-5).
+// window settings, keep_above, section view models, rehydration updates)
+// is handed to dispatch, gated by gens.markApplied so a stale reload cannot
+// overwrite a newer one (AC-5). The keep_above value is applied every
+// successful reload (startup and every watch-triggered reload alike,
+// window-drag-keep-above AC-1); applying the same value repeatedly is a
+// deliberate no-op at the UI layer rather than something this function
+// special-cases (window-drag-keep-above AC-4, Design: "must be a no-op
+// visually").
 func applyConfig(cfg config.Config, err error, r Runner, store *sectionStore, gen uint64, gens *generationTracker, u UI, dispatch func(func())) {
 	if err != nil {
 		dispatch(func() {
@@ -100,6 +105,7 @@ func applyConfig(cfg config.Config, err error, r Runner, store *sectionStore, ge
 		}
 		u.SetConfigError("")
 		u.ApplyWindow(window)
+		applyKeepAbove(u, cfg.Window.KeepAbove)
 		u.SetSections(sections)
 		for _, rh := range rehydrations {
 			u.UpdateSection(rh.key, rh.text, rh.isError)
