@@ -1,0 +1,128 @@
+schema_version: 1
+feature: window-drag-keep-above
+created: 2026-07-17
+base_branch: main
+parent_branch: em-workflow/window-drag-keep-above/integration
+
+project:
+  components:
+    main:
+      language: go
+      build_command: "go build ./..."
+      test_command: "go test ./..."
+      format_command: "gofmt -l -w ."
+      e2e_test_command: ""
+
+workflow:
+  - id: create-spec
+    artifacts: [REQUIREMENTS.md, SPEC.md]
+    status: completed
+    completed_at_commit: d1e4b3ee4ffdf88138bc34608235b40322500ba2
+  - id: design
+    artifacts: [DESIGN.md, design/]
+    status: skipped
+    skipped_reason: "見た目の新規決定なし: 既存メニューへの stock GTK チェック項目追加とドラッグ挙動修正のみで、既存デザインシステム/画面パターンで完全に決まる"
+  - id: create-plan
+    artifacts: [IMPLEMENTATION.md, VERIFICATION.md, tasks/]
+    status: completed
+    completed_at_commit: d1e4b3ee4ffdf88138bc34608235b40322500ba2
+  - id: implement
+    status: pending
+    base_commit: null
+  - id: review
+    status: pending
+  - id: verify
+    status: pending
+    result: null
+    failed_items: []
+  - id: retrospect
+    status: pending
+
+tasks:
+  task0001:
+    title: "config: keep_above field + comment-preserving write-back"
+    plan: tasks/task0001.md
+    files:
+      - internal/config/config.go
+      - internal/config/load.go
+      - internal/config/load_test.go
+      - internal/config/writeback.go
+      - internal/config/writeback_test.go
+    skills: [backend-impl]
+    domains: [input-handling, external-io]
+    complexity: medium
+    requirements: [FR2, FR3, NFR2]
+    status: pending
+    notes: null
+  task0002:
+    title: "ui: whole-window drag + keep-above menu/backend split/EWMH"
+    plan: tasks/task0002.md
+    files:
+      - go.mod
+      - go.sum
+      - internal/ui/window.go
+      - internal/ui/menu.go
+      - internal/ui/ui.go
+      - internal/ui/topmost.go
+      - internal/ui/topmost_x11.go
+    skills: [frontend-impl]
+    domains: [ui, external-io]
+    complexity: high
+    requirements: [FR1, FR3, FR4, NFR1, NFR2]
+    status: pending
+    notes: null
+  task0003:
+    title: "app wiring: keep_above routing + toggle write-back"
+    plan: tasks/task0003.md
+    files:
+      - internal/app/app.go
+      - internal/app/reload.go
+      - internal/app/app_test.go
+    skills: [frontend-impl]
+    domains: [ui, concurrency]
+    complexity: medium
+    requirements: [FR2, FR3, NFR2]
+    status: pending
+    notes: null
+
+review:
+  status: pending
+  rounds_completed: 0
+
+requirements:
+  FR1:
+    title: "Whole-window drag-to-move (capture-phase gesture)"
+    status: ok
+    tbd_reason: null
+    tasks: [task0002]
+    tests: [TS-5, M-1]
+  FR2:
+    title: "Config window.keep_above (default true), applied at startup/reload"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001, task0003]
+    tests: [TS-1, TS-3, M-2]
+  FR3:
+    title: "Menu check item with immediate apply + comment-preserving config write-back"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001, task0002, task0003]
+    tests: [TS-2, TS-3, M-2]
+  FR4:
+    title: "Backend split: EWMH on X11/XWayland, inert+insensitive on Wayland"
+    status: ok
+    tbd_reason: null
+    tasks: [task0002]
+    tests: [TS-4, M-2, M-3]
+  NFR1:
+    title: "Works on both backends without crashes"
+    status: ok
+    tbd_reason: null
+    tasks: [task0002]
+    tests: [M-2, M-3]
+  NFR2:
+    title: "GTK-free tested logic; X11 specifics isolated"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001, task0002, task0003]
+    tests: [TS-1, TS-2, TS-3, TS-4, TS-5]
