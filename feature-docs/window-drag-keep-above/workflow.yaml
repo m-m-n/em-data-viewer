@@ -27,16 +27,21 @@ workflow:
     status: completed
     completed_at_commit: d1e4b3ee4ffdf88138bc34608235b40322500ba2
   - id: implement
-    status: pending
-    base_commit: null
+    status: completed
+    completed_at_commit: c561a82aa6cd6bb2cb738258af7a54eeba9e370c
+    base_commit: d1e4b3ee4ffdf88138bc34608235b40322500ba2
   - id: review
-    status: pending
+    status: completed
+    completed_at_commit: c561a82aa6cd6bb2cb738258af7a54eeba9e370c
   - id: verify
-    status: pending
-    result: null
+    status: completed
+    completed_at_commit: c561a82aa6cd6bb2cb738258af7a54eeba9e370c
+    result: pass
     failed_items: []
+    notes: "Automated: build OK (benign gotk4 cgo warnings only), go test ./... all packages pass (TS-1..TS-5 covered), gofmt clean. No excluded requirements. Manual scenarios M-1..M-3 (whole-window drag on both backends, X11 keep-above + toggle persistence, Wayland insensitive item) remain for human verification."
   - id: retrospect
-    status: pending
+    status: completed
+    completed_at_commit: c561a82aa6cd6bb2cb738258af7a54eeba9e370c
 
 tasks:
   task0001:
@@ -52,8 +57,9 @@ tasks:
     domains: [input-handling, external-io]
     complexity: medium
     requirements: [FR2, FR3, NFR2]
-    status: pending
+    status: merged
     notes: null
+    branch: em-workflow/window-drag-keep-above/task0001
   task0002:
     title: "ui: whole-window drag + keep-above menu/backend split/EWMH"
     plan: tasks/task0002.md
@@ -69,8 +75,9 @@ tasks:
     domains: [ui, external-io]
     complexity: high
     requirements: [FR1, FR3, FR4, NFR1, NFR2]
-    status: pending
-    notes: null
+    status: merged
+    notes: "Deviation: internal/app/app.go への 1 行変更（ui.New に onKeepAboveToggle を配線 — IMPLEMENTATION.md 契約に基づく統合配線で、task0003 が残したプレースホルダの成立）。gdkx11 に XID アクセサが無く、topmost_x11.go 内に最小 cgo ブリッジで解決（X11 依存の隔離は維持）。"
+    branch: em-workflow/window-drag-keep-above/task0002
   task0003:
     title: "app wiring: keep_above routing + toggle write-back"
     plan: tasks/task0003.md
@@ -82,12 +89,25 @@ tasks:
     domains: [ui, concurrency]
     complexity: medium
     requirements: [FR2, FR3, NFR2]
-    status: pending
-    notes: null
+    status: merged
+    notes: "Deviation: transiently added config.Window.KeepAbove (superseded by task0001's merge, resolved via parent-side adoption). ui.New への onKeepAboveToggle 配線 1 行は task0002 側の統合で成立する自己修復シーム設計 — review で未配線が残っていないか要確認。"
+    branch: em-workflow/window-drag-keep-above/task0003
 
 review:
-  status: pending
-  rounds_completed: 0
+  status: completed
+  rounds_completed: 1
+  plan:
+    floor: [comprehensive, spec, security, performance, architecture]
+    discretionary: []
+    codex_cross_validation: true
+  perspectives:
+    comprehensive: completed
+    spec: completed
+    security: completed
+    performance: completed
+    architecture: completed
+  residual_critical_high: 0
+  needs_rework: false
 
 requirements:
   FR1:

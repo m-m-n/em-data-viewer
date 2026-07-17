@@ -1,0 +1,19 @@
+feature: window-drag-keep-above
+collected_at: "2026-07-17T16:51:40+09:00"
+session_ids: [145ae1cc-9164-4b43-9819-b873b566a487]
+signals:
+  review_critical_high: []   # round 1 で critical/high ゼロ（clean 終了、auto-fix 不要）
+  conflict_reworks:
+    - {task: task0003, retries: 1}
+    - {task: task0002, retries: 1}
+  file_prediction_misses:
+    - {task: task0003, files: [internal/config/config.go]}  # 兄弟未着の KeepAbove フィールドを一時追加（親側採用で解消）
+    - {task: task0002, files: [internal/app/app.go]}        # ui.New 二引数化の統合配線 1 行（IMPLEMENTATION.md 契約に基づく計画的統合）
+  verification_failures: []
+  discretionary_perspectives: []
+  declined_findings: []
+lessons_candidates:
+  - "並列 2 タスクが同一契約の両側（ui コンストラクタ変更と app 呼び出し側）を持つ場合、後着タスクが統合配線を所有する形が今回は綺麗に機能した（task0003 の自己修復シーム + task0002 の 1 行配線）。ただし review で『足場（型アサーション）が統合後に残る』指摘が出た — 統合完了後に足場を畳むステップを契約に含めると良い"
+  - "gotk4 の生成バインディングに gdk_x11_surface_get_xid が無く、implementer が最小 cgo ブリッジで解決した。gotk4 のカバレッジ穴は事前調査では見抜きにくい — X11/プラットフォーム固有 API を使うタスクは complexity high 扱いが正解だった"
+  - "codex-reviewer への mktemp 一意ファイル名指示（オーケストレーター側プロンプト注入）は 2 ラウンド連続で混線ゼロ。codex-reviewer.md への恒久反映を /em-workflow:retrospect で行うべき"
+  - "既存アプリへの小規模追加（3 タスク）では初回レビューが clean で済んだ。プロセス初期化順序や並行性を新規に導入しない差分はレビュー負荷が大幅に軽い"

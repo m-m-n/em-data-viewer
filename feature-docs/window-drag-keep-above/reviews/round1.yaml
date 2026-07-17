@@ -1,0 +1,133 @@
+round: 1
+executed_at: "2026-07-17T16:49:42+09:00"
+scope:
+  review_mode: diff
+  base_commit: d1e4b3ee4ffdf88138bc34608235b40322500ba2
+  head_commit: c561a82aa6cd6bb2cb738258af7a54eeba9e370c
+  changed_files:
+    - go.mod
+    - go.sum
+    - internal/app/app.go
+    - internal/app/app_test.go
+    - internal/app/reload.go
+    - internal/config/config.go
+    - internal/config/load.go
+    - internal/config/load_test.go
+    - internal/config/writeback.go
+    - internal/config/writeback_test.go
+    - internal/ui/menu.go
+    - internal/ui/topmost.go
+    - internal/ui/topmost_test.go
+    - internal/ui/topmost_x11.go
+    - internal/ui/topmost_x11_test.go
+    - internal/ui/ui.go
+    - internal/ui/window.go
+plan:
+  floor: [comprehensive, spec, security, performance, architecture]
+  discretionary: []
+  codex_cross_validation: true
+perspective_runs:
+  - {perspective: comprehensive, source: claude, status: completed}
+  - {perspective: spec, source: claude, status: completed}
+  - {perspective: spec, source: codex, status: completed}
+  - {perspective: security, source: claude, status: completed}
+  - {perspective: security, source: codex, status: completed}
+  - {perspective: performance, source: claude, status: completed}
+  - {perspective: performance, source: codex, status: completed}
+  - {perspective: architecture, source: claude, status: completed}
+  - {perspective: architecture, source: codex, status: completed}
+notes: >
+  critical/high はゼロ。統合配線（type-assertion シーム × ui.New 二引数化）の
+  完成は comprehensive が検証済み。codex prompt の mktemp 分離は全 4 体で機能
+  し混線なし。
+findings:
+  - stable_id: be41853e04855189
+    severity: medium
+    category: comprehensive
+    file: internal/app/app.go
+    line: 54
+    title: "keep-above apply routed through a structural type assertion that silently no-ops on contract drift"
+    description: "applyKeepAbove の u.(KeepAboveUI) は現状成立して動作するが、ui.UI.SetKeepAbove のシグネチャが将来変わると無音で no-op 化する（コンパイルエラーなし、fakeUI は独立実装なのでテストも緑のまま）。worktree 独立性のための足場が統合後も残った形。architecture (claude) も同一サイトを指摘。"
+    suggestion: "SetKeepAbove を app 層 UI インターフェースに取り込んで直接呼ぶ（fakeUI は実装済み）か、最低限 var _ KeepAboveUI = (*ui.UI)(nil) のコンパイル時アサーションを追加。古い『未実装』コメントも削除。"
+    sources: [claude:comprehensive, claude:architecture]
+    confidence: 75
+    resolution: unresolved
+    resolution_reason: null
+  - stable_id: 4cd532c486c6df68
+    severity: medium
+    category: architecture
+    file: internal/app/app.go
+    line: 79
+    title: "Toggle persistence has no ordering owner（書き戻し goroutine が毎回独立起動）"
+    description: "トグルごとに独立 goroutine で read-modify-write するため、高速連打で古い値が新しい値を上書きしうる。エラーバナーも順序不定。performance/spec (codex) も同一サイトを指摘（増幅・仕様の serialized worker 記述との乖離）。"
+    suggestion: "app 所有の単一直列ワーカー（既存 reloadLoop の規律と同様）に書き戻しをキューイングし、最新値で coalesce する。"
+    sources: [codex:architecture, codex:performance, codex:spec]
+    confidence: 65
+    resolution: unresolved
+    resolution_reason: null
+  - stable_id: 116ff9f01e449b34
+    severity: medium
+    category: architecture
+    file: internal/ui/topmost_x11_test.go
+    line: 6
+    title: "テストが xgb/xproto を import して X11 隔離境界を弱めている"
+    description: "cgo/xgb は topmost_x11.go のみという隔離要件に対し、テストファイルが xproto 型を直接参照。"
+    suggestion: "テストから xproto import を外し、untyped int 定数かバックエンド中立のヘルパで検証する。"
+    sources: [codex:architecture]
+    confidence: 50
+    resolution: unresolved
+    resolution_reason: null
+  - stable_id: f2ef740f3589583d
+    severity: medium
+    category: spec
+    file: internal/ui/topmost.go
+    line: 29
+    title: "Wayland でチェック表示が『実効状態』でなく『意図』を映す"
+    description: "FR3 は『reflects effective state』。Wayland ではデフォルト true のままチェック付き・無効化表示になり、実際には効いていない状態と表示が乖離。"
+    suggestion: "表示チェックは enabled && supported から導出し、意図は別途保持する。"
+    sources: [codex:spec]
+    confidence: 50
+    resolution: unresolved
+    resolution_reason: null
+  - stable_id: 4b97ab1056904d5d
+    severity: medium
+    category: spec
+    file: internal/ui/topmost_x11.go
+    line: 138
+    title: "X11 送信失敗時に unsupported へ降格しない"
+    description: "SPEC の Error Handling は接続/XID 不能時に inert 降格を要求。SendEventChecked 失敗はログのみで backend は supported のまま、メニューは有効な no-op になる。"
+    suggestion: "送信/アトム解決失敗で backend を unsupported にし、メニュー感度を更新する。"
+    sources: [codex:spec]
+    confidence: 65
+    resolution: unresolved
+    resolution_reason: null
+  - stable_id: 1962a8ac98facccc
+    severity: medium
+    category: performance
+    file: internal/ui/topmost_x11.go
+    line: 138
+    title: "EWMH 適用が GTK メインループ上で同期 X ラウンドトリップする"
+    description: "SendEventChecked().Check() が X サーバ往復を強制。初回は接続+InternAtom×2 も同期。遅い X サーバで UI が固まりうる（発生頻度はリロード/トグル時のみ）。"
+    suggestion: "X 接続・アトム解決・checked 送信をメインループ外に移すか、unchecked send + flush にする。直近適用値をキャッシュして同値リロードをスキップ。"
+    sources: [codex:performance]
+    confidence: 65
+    resolution: unresolved
+    resolution_reason: null
+  - stable_id: e52482f16aad4910
+    severity: medium
+    category: security
+    file: internal/config/writeback.go
+    line: 145
+    title: "アトミック置換で config のオーナー/ACL が引き継がれない可能性"
+    description: "temp ファイルはプロセスの UID/GID とディレクトリ既定 ACL を持ち、Chmod はモードビットのみコピー。制限付きグループ/ACL 運用の config では置換で参照範囲が広がりうる（config はコマンドを含むため書き込み権は特に敏感）。単一ユーザー標準運用では実害は限定的。"
+    suggestion: "fd ベースで所有権/ACL を可能な範囲で引き継ぐか、再現できない場合は 0600 に固定 or 更新失敗にする。"
+    sources: [codex:security]
+    confidence: 50
+    resolution: unresolved
+    resolution_reason: null
+auto_fix:
+  loops_run: 0
+  applied_total: 0
+  termination: clean
+residual_critical_high: 0
+rework_required: false
