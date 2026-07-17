@@ -61,6 +61,9 @@ type App struct {
 	store       *sectionStore
 	generations *generationTracker
 
+	triggers chan struct{}
+	done     chan struct{}
+
 	stopOnce sync.Once
 }
 
@@ -84,6 +87,8 @@ func New(configPath string) *App {
 		runner:      runner.New(),
 		store:       newSectionStore(),
 		generations: newGenerationTracker(),
+		triggers:    make(chan struct{}),
+		done:        make(chan struct{}),
 	}
 	a.ui = ui.New(a.Quit)
 	return a
@@ -93,17 +98,19 @@ func New(configPath string) *App {
 // banner, AC-2), start the config watcher and the runner-event consumer,
 // then block on the UI main loop, returning the process exit code.
 func (a *App) Run() int {
-	// Load/holder-update/runner-reconcile run on this dedicated startup
-	// goroutine, off the GTK main loop (Rework Round 1: reload pipeline,
-	// AC-4). The GTK frame does not exist until ui.Run's ConnectActivate
-	// callback fires, and every UI method silently no-ops while the frame
-	// is nil, so only reload's UI-projection half — dispatched onto the
-	// main loop inside reload/applyConfig — needs to wait for activation;
-	// the generation number is issued here, before the goroutine starts,
-	// so trigger order is preserved even if a watch-triggered reload
-	// happens to finish first (AC-5).
-	gen := a.generations.next()
-	go reload(a.configPath, a.holder, a.runner, a.store, gen, a.generations, a.ui, dispatchOnMainLoop)
+	// All reload transactions (initial load and every watch notification)
+	// are serialized through reloadLoop, a single dedicated goroutine, off
+	// the GTK main loop (Rework Round 1/2: reload pipeline, AC-4). The GTK
+	// frame does not exist until ui.Run's ConnectActivate callback fires,
+	// and every UI method silently no-ops while the frame is nil, so only
+	// reload's UI-projection half — dispatched onto the main loop inside
+	// reload/applyConfig — needs to wait for activation. Because
+	// reloadLoop processes triggers one at a time, in the order they are
+	// sent on a.triggers, the generation number, Holder update, Runner.Apply
+	// and UI dispatch for a given reload always complete before the next
+	// one starts, so trigger order is preserved end-to-end (AC-5).
+	go a.reloadLoop()
+	a.trigger()
 
 	w, err := config.NewWatcher(a.configPath, watchDebounce)
 	if err != nil {
@@ -122,14 +129,39 @@ func (a *App) Run() int {
 	return a.ui.Run()
 }
 
-// watchLoop reloads the config each time the watcher notifies (FR3), until
-// Quit closes the watcher. It IS the "watcher goroutine" that performs
-// load, holder update and runner reconcile off the GTK main loop (AC-4);
-// only the UI projection reload computes is dispatched onto it.
+// trigger sends a reload trigger to reloadLoop, unless Quit has already
+// signaled shutdown via a.done.
+func (a *App) trigger() {
+	select {
+	case a.triggers <- struct{}{}:
+	case <-a.done:
+	}
+}
+
+// reloadLoop consumes reload triggers (the initial load and every watch
+// notification) one at a time, in the order they were sent, and runs a full
+// reload transaction — generation issuance, load, holder update, runner
+// reconcile and UI dispatch — for each before consuming the next. This
+// serializes reload transactions in trigger order, so an older reload can
+// never overwrite the holder/runner/UI after a newer one (round 2 fix for
+// the generation race). It exits once Quit closes a.done.
+func (a *App) reloadLoop() {
+	for {
+		select {
+		case <-a.triggers:
+			gen := a.generations.next()
+			reload(a.configPath, a.holder, a.runner, a.store, gen, a.generations, a.ui, dispatchOnMainLoop)
+		case <-a.done:
+			return
+		}
+	}
+}
+
+// watchLoop forwards a reload trigger each time the watcher notifies (FR3),
+// until Quit closes the watcher and signals a.done.
 func (a *App) watchLoop() {
 	for range a.watcher.Notify() {
-		gen := a.generations.next()
-		reload(a.configPath, a.holder, a.runner, a.store, gen, a.generations, a.ui, dispatchOnMainLoop)
+		a.trigger()
 	}
 }
 
@@ -150,6 +182,9 @@ func dispatchOnMainLoop(fn func()) {
 // main loop (FR8). Idempotent: a second call is a no-op.
 func (a *App) Quit() {
 	a.stopOnce.Do(func() {
+		if a.done != nil {
+			close(a.done)
+		}
 		if a.watcher != nil {
 			a.watcher.Close()
 		}
