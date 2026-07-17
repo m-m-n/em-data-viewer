@@ -17,3 +17,5 @@ lessons_candidates:
   - "gotk4 の生成バインディングに gdk_x11_surface_get_xid が無く、implementer が最小 cgo ブリッジで解決した。gotk4 のカバレッジ穴は事前調査では見抜きにくい — X11/プラットフォーム固有 API を使うタスクは complexity high 扱いが正解だった"
   - "codex-reviewer への mktemp 一意ファイル名指示（オーケストレーター側プロンプト注入）は 2 ラウンド連続で混線ゼロ。codex-reviewer.md への恒久反映を /em-workflow:retrospect で行うべき"
   - "既存アプリへの小規模追加（3 タスク）では初回レビューが clean で済んだ。プロセス初期化順序や並行性を新規に導入しない差分はレビュー負荷が大幅に軽い"
+  - "【実機バグ】gotk4 はバックエンド固有の GDK 型（GdkWaylandToplevel / GdkX11Toplevel、イベント型も同様）を Go ラッパに解決できず base 型にフォールバックする。gdk.Topleveller 等インターフェースへの型アサーションは『常に静かに失敗』し、CurrentEvent() も nil になりうる。BeginMove はタイムスタンプ 0 だとコンポジタに無視される。対策: 明示的な gdk.Toplevel{Surface: *gdk.BaseSurface(...)} ラップと CurrentEventTime()。この罠は静的レビューでは検出不能で、実機ドラッグ検証で初めて発覚した — GUI 動作の受け入れ確認を『実際に動かす』ステップとして必須化すべき"
+  - "【実機バグ】GSK の GPU レンダラ（vulkan/ngl 共通）は小サイズグリフの細い横ストローク（12pt の 5・7 の上棒）を欠落させる環境がある。cairo レンダラのみ正常（レンダラ別スクショ比較で実証）。低頻度描画のウィジェットは GSK_RENDERER=cairo デフォルトが安全（明示指定は尊重、子プロセスへの env 伝播は受容済みトレードオフ）"

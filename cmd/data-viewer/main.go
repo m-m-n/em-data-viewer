@@ -12,6 +12,17 @@ import (
 )
 
 func main() {
+	// GSK's GPU renderers (vulkan/ngl) drop thin horizontal glyph strokes at
+	// small sizes on this class of setup (e.g. the top bar of 5/7 at 12pt),
+	// while the cairo renderer draws them correctly. The widget redraws at
+	// ~1Hz, so software rendering costs nothing; an explicit GSK_RENDERER
+	// from the environment still wins. The override also propagates to
+	// runner-spawned child commands (they inherit the process environment) —
+	// accepted trade-off: a configured command that launches a GTK app just
+	// falls back to software rendering.
+	if os.Getenv("GSK_RENDERER") == "" {
+		os.Setenv("GSK_RENDERER", "cairo")
+	}
 	os.Exit(run(os.Args[1:]))
 }
 

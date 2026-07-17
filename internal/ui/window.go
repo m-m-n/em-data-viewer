@@ -201,10 +201,17 @@ func beginWindowMove(widget *gtk.Widget, gesture *gtk.GestureDrag, x, y float64)
 	if native == nil {
 		return
 	}
-	toplevel, ok := native.Surface().(gdk.Topleveller)
-	if !ok {
+	surface := native.Surface()
+	if surface == nil {
 		return
 	}
+	// The backend-specific surface GTypes (GdkWaylandToplevel /
+	// GdkX11Toplevel) are not registered with gotk4, so the dynamic wrapper
+	// falls back to the base *gdk.Surface and a type assertion to
+	// gdk.Topleveller always fails. Wrap the same object as a Toplevel
+	// explicitly — a realized top-level window's surface always implements
+	// GdkToplevel on every backend.
+	toplevel := gdk.Toplevel{Surface: *gdk.BaseSurface(surface)}
 	nx, ny, ok := widget.TranslateCoordinates(native, x, y)
 	if !ok {
 		return
@@ -213,9 +220,9 @@ func beginWindowMove(widget *gtk.Widget, gesture *gtk.GestureDrag, x, y float64)
 	if device == nil {
 		return
 	}
-	var timestamp uint32
-	if event := gesture.CurrentEvent(); event != nil {
-		timestamp = gdk.BaseEvent(event).Time()
-	}
-	toplevel.BeginMove(device, int(gesture.CurrentButton()), nx, ny, timestamp)
+	// CurrentEvent() resolves through gotk4's event-wrapper registry and can
+	// come back nil for backend event types, yielding timestamp 0 — which
+	// compositors ignore for interactive moves. CurrentEventTime() reads the
+	// timestamp directly from the controller instead.
+	toplevel.BeginMove(device, int(gesture.CurrentButton()), nx, ny, gesture.CurrentEventTime())
 }
