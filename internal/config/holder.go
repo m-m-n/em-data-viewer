@@ -9,6 +9,11 @@ import "sync"
 // failed reload, which retains the previously held Config and
 // records the new error (surfaced via Err until the next successful
 // Update).
+//
+// Holder is the single authoritative source the app layer's reload path
+// reads from (Rework Round 1: reload pipeline): it reads Config/Err back
+// immediately after each Update rather than keeping a separate local copy
+// of the load result, so Holder is never a write-only duplicate.
 type Holder struct {
 	mu     sync.RWMutex
 	config Config

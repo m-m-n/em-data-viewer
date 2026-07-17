@@ -53,11 +53,13 @@ type Watcher interface {
 // construction, startup ordering, event routing and shutdown described in
 // the task plan.
 type App struct {
-	configPath string
-	holder     *config.Holder
-	runner     Runner
-	ui         UI
-	watcher    Watcher
+	configPath  string
+	holder      *config.Holder
+	runner      Runner
+	ui          UI
+	watcher     Watcher
+	store       *sectionStore
+	generations *generationTracker
 
 	stopOnce sync.Once
 }
@@ -77,9 +79,11 @@ func ResolveConfigPath(explicit string) (string, error) {
 // UI's main loop.
 func New(configPath string) *App {
 	a := &App{
-		configPath: configPath,
-		holder:     config.NewHolder(),
-		runner:     runner.New(),
+		configPath:  configPath,
+		holder:      config.NewHolder(),
+		runner:      runner.New(),
+		store:       newSectionStore(),
+		generations: newGenerationTracker(),
 	}
 	a.ui = ui.New(a.Quit)
 	return a
@@ -89,13 +93,17 @@ func New(configPath string) *App {
 // banner, AC-2), start the config watcher and the runner-event consumer,
 // then block on the UI main loop, returning the process exit code.
 func (a *App) Run() int {
-	// The GTK frame does not exist until ui.Run's ConnectActivate callback
-	// fires, and every UI method silently no-ops while the frame is nil, so
-	// the initial reload must be scheduled onto the GTK main loop (running
-	// after activation) rather than invoked directly here.
-	dispatchOnMainLoop(func() {
-		reload(a.configPath, a.holder, a.ui, a.runner)
-	})
+	// Load/holder-update/runner-reconcile run on this dedicated startup
+	// goroutine, off the GTK main loop (Rework Round 1: reload pipeline,
+	// AC-4). The GTK frame does not exist until ui.Run's ConnectActivate
+	// callback fires, and every UI method silently no-ops while the frame
+	// is nil, so only reload's UI-projection half — dispatched onto the
+	// main loop inside reload/applyConfig — needs to wait for activation;
+	// the generation number is issued here, before the goroutine starts,
+	// so trigger order is preserved even if a watch-triggered reload
+	// happens to finish first (AC-5).
+	gen := a.generations.next()
+	go reload(a.configPath, a.holder, a.runner, a.store, gen, a.generations, a.ui, dispatchOnMainLoop)
 
 	w, err := config.NewWatcher(a.configPath, watchDebounce)
 	if err != nil {
@@ -115,12 +123,13 @@ func (a *App) Run() int {
 }
 
 // watchLoop reloads the config each time the watcher notifies (FR3), until
-// Quit closes the watcher.
+// Quit closes the watcher. It IS the "watcher goroutine" that performs
+// load, holder update and runner reconcile off the GTK main loop (AC-4);
+// only the UI projection reload computes is dispatched onto it.
 func (a *App) watchLoop() {
 	for range a.watcher.Notify() {
-		dispatchOnMainLoop(func() {
-			reload(a.configPath, a.holder, a.ui, a.runner)
-		})
+		gen := a.generations.next()
+		reload(a.configPath, a.holder, a.runner, a.store, gen, a.generations, a.ui, dispatchOnMainLoop)
 	}
 }
 
@@ -128,7 +137,7 @@ func (a *App) watchLoop() {
 // was called), translating and dispatching each one onto the GTK main loop
 // (NFR2: no direct cross-goroutine GTK access).
 func (a *App) eventLoop() {
-	consumeEvents(a.runner.Events(), a.runner.Snapshot, a.ui, dispatchOnMainLoop)
+	consumeEvents(a.runner.Events(), a.runner.Snapshot, a.ui, a.store, dispatchOnMainLoop)
 }
 
 // dispatchOnMainLoop schedules fn to run once on the GTK main loop.
