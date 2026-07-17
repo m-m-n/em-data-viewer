@@ -11,9 +11,7 @@ import (
 	"strings"
 )
 
-// allowedTags is the whitelist of Pango markup element names. Attribute
-// values are not validated; Pango ignores attributes it does not
-// understand, so only well-formedness and the element name matter here.
+// allowedTags is the whitelist of Pango markup element names.
 var allowedTags = map[string]bool{
 	"span":   true,
 	"b":      true,
@@ -26,6 +24,29 @@ var allowedTags = map[string]bool{
 	"small":  true,
 	"big":    true,
 	"markup": true,
+}
+
+// allowedSpanAttrs is the whitelist of attribute names Pango accepts on
+// a <span> element. Attribute VALUES are not validated (documented
+// limitation: Pango's value parsing is not reproducible without GTK,
+// and value errors are rare); only the attribute NAME is checked, so
+// GTK never receives a <span> attribute it would reject outright.
+// Every other whitelisted tag takes no attributes at all.
+var allowedSpanAttrs = map[string]bool{
+	"font": true, "font_desc": true, "font_family": true, "face": true,
+	"size": true, "style": true, "weight": true, "variant": true, "stretch": true,
+	"foreground": true, "fgcolor": true, "color": true,
+	"background": true, "bgcolor": true,
+	"alpha": true, "fgalpha": true,
+	"background_alpha": true, "bgalpha": true,
+	"underline": true, "underline_color": true,
+	"overline": true, "overline_color": true,
+	"rise": true, "baseline_shift": true, "font_scale": true,
+	"strikethrough": true, "strikethrough_color": true,
+	"fallback": true, "lang": true, "letter_spacing": true,
+	"gravity": true, "gravity_hint": true, "font_features": true,
+	"allow_breaks": true, "insert_hyphens": true, "line_height": true,
+	"text_transform": true, "segment": true, "show": true,
 }
 
 // Render decides whether text is valid Pango markup. When it is, text is
@@ -65,6 +86,16 @@ func isValidMarkup(text string) bool {
 				continue
 			}
 			if !allowedTags[t.Name.Local] {
+				return false
+			}
+			if t.Name.Local == "span" {
+				for _, attr := range t.Attr {
+					if !allowedSpanAttrs[attr.Name.Local] {
+						return false
+					}
+				}
+			} else if len(t.Attr) > 0 {
+				// Every other whitelisted tag takes no attributes.
 				return false
 			}
 		case xml.EndElement:

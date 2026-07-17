@@ -102,7 +102,28 @@ func Load(path string) (Config, error) {
 		cfg.Sections = append(cfg.Sections, sec)
 	}
 
+	if err := checkDuplicateKeys(cfg.Sections); err != nil {
+		return Config{}, err
+	}
+
 	return cfg, nil
+}
+
+// checkDuplicateKeys rejects a config whose sections are not uniquely
+// identified by SectionConfig.Key(): downstream components (runner,
+// ui, app) assume key uniqueness, and two sections with an identical
+// key would otherwise silently collide (a leaked widget, a section
+// whose process the runner cannot tell apart from another).
+func checkDuplicateKeys(sections []SectionConfig) error {
+	firstIndex := make(map[string]int, len(sections))
+	for i, sec := range sections {
+		key := sec.Key()
+		if first, ok := firstIndex[key]; ok {
+			return fmt.Errorf("config: sections %d and %d (name=%q command=%q mode=%q) have identical settings: duplicate section keys are not allowed", first, i, sec.Name, sec.Command, sec.Mode)
+		}
+		firstIndex[key] = i
+	}
+	return nil
 }
 
 // buildSection validates one raw YAML section and converts it into
@@ -132,6 +153,9 @@ func buildSection(rs yamlSection) (SectionConfig, error) {
 		d, err := time.ParseDuration(rs.Interval)
 		if err != nil {
 			return SectionConfig{}, fmt.Errorf("unparsable interval %q: %w", rs.Interval, err)
+		}
+		if d <= 0 {
+			return SectionConfig{}, fmt.Errorf("non-positive interval %q", rs.Interval)
 		}
 		sec.Interval = d
 	}

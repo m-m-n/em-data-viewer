@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 )
@@ -95,5 +96,55 @@ func TestRunInterval_FailureEmitsErrorAndContinues(t *testing.T) {
 			cancel()
 			<-done
 		})
+	}
+}
+
+// TestRunInterval_OutputOverflowEmitsErrorAndContinues references AC-3:
+// a run whose stdout exceeds the capture limit is terminated (not left
+// to grow memory unbounded), emits an error event noting the
+// truncation for that section, and the interval cycle continues
+// afterward (a later tick still produces events).
+func TestRunInterval_OutputOverflowEmitsErrorAndContinues(t *testing.T) {
+	oldLimit := intervalOutputLimit
+	oldGrace := terminateGrace
+	intervalOutputLimit = 64
+	terminateGrace = 50 * time.Millisecond
+	defer func() {
+		intervalOutputLimit = oldLimit
+		terminateGrace = oldGrace
+	}()
+
+	events := make(chan Event, 10)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		runInterval(ctx, "noisy", "yes", 30*time.Millisecond, events)
+	}()
+
+	for i := 0; i < 2; i++ {
+		select {
+		case ev := <-events:
+			if ev.Kind != KindError {
+				t.Fatalf("event %d: Kind = %v, want %v", i, ev.Kind, KindError)
+			}
+			if ev.SectionKey != "noisy" {
+				t.Fatalf("event %d: SectionKey = %q, want %q", i, ev.SectionKey, "noisy")
+			}
+			if !strings.Contains(ev.Text, "exceeded") {
+				t.Errorf("event %d: Text = %q, want it to mention the output limit was exceeded", i, ev.Text)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("timed out waiting for overflow error event %d (cycle should continue)", i)
+		}
+	}
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for runInterval to return after cancel (child should not be stranded)")
 	}
 }

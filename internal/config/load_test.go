@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -163,6 +164,38 @@ sections:
 			name: "malformed yaml",
 			yaml: "sections: [this is not: valid: yaml",
 		},
+		{
+			name: "zero interval for interval mode",
+			yaml: `
+sections:
+  - command: "date"
+    mode: interval
+    interval: 0s
+`,
+		},
+		{
+			name: "negative interval for interval mode",
+			yaml: `
+sections:
+  - command: "date"
+    mode: interval
+    interval: -1s
+`,
+		},
+		{
+			name: "duplicate section keys",
+			yaml: `
+sections:
+  - name: clock
+    command: "date"
+    mode: interval
+    interval: 1s
+  - name: clock
+    command: "date"
+    mode: interval
+    interval: 1s
+`,
+		},
 	}
 
 	for _, tt := range tests {
@@ -179,6 +212,34 @@ sections:
 				t.Errorf("Load() config = %+v, want zero value on error", cfg)
 			}
 		})
+	}
+}
+
+// TestLoad_DuplicateSectionKeysNamesOffendingIndices references AC-2:
+// the duplicate-key validation error names the offending section
+// indices so the user can find them in their config file.
+func TestLoad_DuplicateSectionKeysNamesOffendingIndices(t *testing.T) {
+	path := writeTempConfig(t, `
+sections:
+  - name: clock
+    command: "date"
+    mode: interval
+    interval: 1s
+  - name: uptime
+    command: "uptime"
+    mode: interval
+    interval: 1s
+  - name: clock
+    command: "date"
+    mode: interval
+    interval: 1s
+`)
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("Load() error = nil, want duplicate-key error")
+	}
+	if !strings.Contains(err.Error(), "0") || !strings.Contains(err.Error(), "2") {
+		t.Errorf("Load() error = %q, want it to name offending indices 0 and 2", err.Error())
 	}
 }
 

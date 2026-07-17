@@ -163,6 +163,58 @@ func TestWatcher_SurvivesFileDeletion(t *testing.T) {
 	}
 }
 
+// TestWatcher_NotifiesOnDelete references AC-1: deleting the watched
+// config file (with no replacement) still produces a notification, so
+// the app layer can react (last-good config + banner) instead of
+// silently going stale.
+func TestWatcher_NotifiesOnDelete(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(path, []byte("sections: []\n"), 0o644); err != nil {
+		t.Fatalf("seed config: %v", err)
+	}
+
+	w, err := NewWatcher(path, testDebounce)
+	if err != nil {
+		t.Fatalf("NewWatcher() error = %v", err)
+	}
+	defer w.Close()
+
+	if err := os.Remove(path); err != nil {
+		t.Fatalf("remove config: %v", err)
+	}
+
+	if !waitNotify(t, w, testTimeout) {
+		t.Fatal("watcher did not notify after the config file was deleted")
+	}
+}
+
+// TestWatcher_NotifiesOnRenameAway references AC-1: renaming the
+// watched config file to a different name (without replacing it) also
+// produces a notification.
+func TestWatcher_NotifiesOnRenameAway(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(path, []byte("sections: []\n"), 0o644); err != nil {
+		t.Fatalf("seed config: %v", err)
+	}
+
+	w, err := NewWatcher(path, testDebounce)
+	if err != nil {
+		t.Fatalf("NewWatcher() error = %v", err)
+	}
+	defer w.Close()
+
+	renamed := filepath.Join(dir, "config.yaml.bak")
+	if err := os.Rename(path, renamed); err != nil {
+		t.Fatalf("rename config away: %v", err)
+	}
+
+	if !waitNotify(t, w, testTimeout) {
+		t.Fatal("watcher did not notify after the config file was renamed away")
+	}
+}
+
 func TestWatcher_CloseStopsNotifications(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")

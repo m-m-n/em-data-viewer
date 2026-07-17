@@ -65,9 +65,12 @@ func (w *Watcher) Close() error {
 }
 
 // run is the watcher's event loop. It filters directory events down
-// to Create/Write operations on the target filename, then debounces
-// bursts of matching events into a single notification per quiet
-// window.
+// to Create/Write/Remove/Rename operations on the target filename,
+// then debounces bursts of matching events into a single
+// notification per quiet window. Remove/Rename are included so a
+// deleted or renamed-away config file still produces a notification
+// (surfaced by the app layer as a failed reload against the
+// last-good config), not silence.
 func (w *Watcher) run(debounce time.Duration) {
 	var timer *time.Timer
 	var timerC <-chan time.Time
@@ -87,7 +90,7 @@ func (w *Watcher) run(debounce time.Duration) {
 			if !ok {
 				return
 			}
-			if ev.Op&(fsnotify.Create|fsnotify.Write) == 0 {
+			if ev.Op&(fsnotify.Create|fsnotify.Write|fsnotify.Remove|fsnotify.Rename) == 0 {
 				continue
 			}
 			if filepath.Base(ev.Name) != w.filename {

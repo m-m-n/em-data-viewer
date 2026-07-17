@@ -122,6 +122,81 @@ func TestRender_NonWhitelistedElements(t *testing.T) {
 	}
 }
 
+// TestRender_SpanAttributeWhitelist covers AC-5: a <span> unknown
+// attribute (e.g. badattr) falls back to escaped plain text, while
+// whitelisted attributes still pass through unchanged.
+func TestRender_SpanAttributeWhitelist(t *testing.T) {
+	valid := []struct {
+		name  string
+		input string
+	}{
+		{"foreground attribute", `<span foreground="red">text</span>`},
+		{"fgcolor attribute", `<span fgcolor="red">text</span>`},
+		{"color attribute", `<span color="red">text</span>`},
+		{"background attribute", `<span background="blue">text</span>`},
+		{"size attribute", `<span size="large">text</span>`},
+		{"weight attribute", `<span weight="bold">text</span>`},
+		{"underline and underline_color attributes", `<span underline="single" underline_color="red">text</span>`},
+		{"font_features attribute", `<span font_features="tnum=1">text</span>`},
+		{"multiple whitelisted attributes together", `<span font_desc="Sans 12" style="italic" variant="smallcaps" stretch="condensed" alpha="50%" background_alpha="50%" overline="single" overline_color="red" rise="1000" baseline_shift="2000" font_scale="superscript" strikethrough="true" strikethrough_color="red" fallback="true" lang="en" letter_spacing="1024" gravity="south" gravity_hint="natural" allow_breaks="true" insert_hyphens="true" line_height="1.5" text_transform="uppercase" segment="word" show="spaces" face="Sans" font="Sans 12" bgcolor="blue">text</span>`},
+	}
+	for _, tc := range valid {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := Render(tc.input)
+			if !ok {
+				t.Fatalf("Render(%q) valid = false, want true", tc.input)
+			}
+			if got != tc.input {
+				t.Fatalf("Render(%q) = %q, want unchanged input", tc.input, got)
+			}
+		})
+	}
+
+	invalid := []struct {
+		name  string
+		input string
+	}{
+		{"unknown attribute name", `<span badattr="x">text</span>`},
+		{"misspelled attribute name", `<span foregroundcolor="red">text</span>`},
+	}
+	for _, tc := range invalid {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := Render(tc.input)
+			if ok {
+				t.Fatalf("Render(%q) valid = true, want false", tc.input)
+			}
+			want := escape(tc.input)
+			if got != want {
+				t.Fatalf("Render(%q) = %q, want escaped %q", tc.input, got, want)
+			}
+		})
+	}
+}
+
+// TestRender_NonSpanTagsRejectAttributes covers AC-5's "other whitelisted
+// tags take no attributes" rule: a non-span whitelisted tag carrying any
+// attribute is invalid, while the same tag with no attributes is
+// unchanged.
+func TestRender_NonSpanTagsRejectAttributes(t *testing.T) {
+	input := `<b size="large">bold</b>`
+	got, ok := Render(input)
+	if ok {
+		t.Fatalf("Render(%q) valid = true, want false (non-span tags take no attributes)", input)
+	}
+	if want := escape(input); got != want {
+		t.Fatalf("Render(%q) = %q, want escaped %q", input, got, want)
+	}
+
+	plain := "<b>bold</b>"
+	got, ok = Render(plain)
+	if !ok {
+		t.Fatalf("Render(%q) valid = false, want true", plain)
+	}
+	if got != plain {
+		t.Fatalf("Render(%q) = %q, want unchanged input", plain, got)
+	}
+}
+
 // TestRender_EscapedOutputIsFullyEscaped covers AC-5: for every invalid
 // input, the escaped output must contain no unescaped '<', '>' or '&'
 // outside of entities. This is proven by round-tripping the escaped output
