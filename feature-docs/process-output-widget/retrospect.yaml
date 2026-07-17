@@ -1,0 +1,31 @@
+feature: process-output-widget
+collected_at: "2026-07-17T12:05:47+09:00"
+session_ids: [145ae1cc-9164-4b43-9819-b873b566a487]
+signals:
+  review_critical_high:
+    - {stable_id: d6dd035dd566262f, category: spec, file: internal/app/app.go, title: "初期設定がスタートアップで画面に反映されない（frame 生成前の初回 reload が no-op）", resolution: fixed}
+    - {stable_id: 8628ccd9d3db1214, category: architecture, file: internal/app/app.go, title: "Config live-reload mutates GTK widgets off the main loop", resolution: fixed}
+    - {stable_id: fcee69d7f207a522, category: performance, file: internal/app/events.go, title: "GTK callback queue is unbounded during stream floods", resolution: fixed}
+    - {stable_id: 70890daf6ab47210, category: performance, file: internal/runner/stream.go, title: "Scanner termination can make process shutdown block forever", resolution: fixed}
+    - {stable_id: b0f986ef4e0e86e1, category: architecture, file: internal/config/config.go, title: "Execution fingerprint used as section identity (Key collision)", resolution: fixed}
+    - {stable_id: 38e04a8e3fa53fe0, category: architecture, file: internal/app/reload.go, title: "Config reconciliation destroys presentation state", resolution: fixed}
+    - {stable_id: 18c80d07b15e9a4c, category: architecture, file: internal/app/app.go, title: "App.Run does not own cleanup for all main-loop exit paths", resolution: fixed}
+    - {stable_id: 6d014cd3b45e2335, category: spec, file: internal/ui/style.go, title: "SPEC style keys diverge from implementation", resolution: fixed}  # rework task0006
+    - {stable_id: ffe893618eae5df9, category: spec, file: internal/ui/ui.go, title: "Config-path argument forwarded to GApplication suppresses activation", resolution: fixed}  # rework task0007
+    - {stable_id: 2b042f9d5245580f, category: architecture, file: internal/app/reload.go, title: "Reload discards presentation state (interval output / error states)", resolution: fixed}  # rework task0008
+    - {stable_id: r2-generation-race, category: architecture, file: internal/app/app.go, title: "Reload generations do not protect the authoritative commit", resolution: fixed}  # round 2 auto-fix
+  conflict_reworks:
+    - {task: task0001, retries: 1}
+    - {task: task0002, retries: 1}
+    - {task: task0004, retries: 1}
+  file_prediction_misses: []
+  verification_failures: []
+  discretionary_perspectives: []
+  declined_findings:
+    - {stable_id: e901d050d3892841, category: spec, resolution_reason: "Key に Name を含める修正のトレードオフ（セクション名変更でプロセス再起動）をユーザーが loop 2 の方針選択時に明示承認済み"}
+lessons_candidates:
+  - "空リポジトリからの全並列実装で、統合配線タスク（task0005: 兄弟パッケージの実 API に compile する必要がある）が兄弟未着で必然的に失敗した。planner は『全兄弟のマージ後にのみ着手可能な統合タスク』を予見できず、IMPLEMENTATION.md の Risk Assessment にも依存順リスクの記載が無かった。plan-writing スキルの『Integration wiring must have an owner』規則に『空リポジトリ/新規パッケージ群では統合タスクは placeholder 不可なら並列不能』の判断基準を足す価値がある"
+  - "gotk4 (cgo) タスクはホストに GTK4 開発ヘッダ（libgtk-4-dev 等）が必要。create-spec / planner 段階で cgo 依存のシステムパッケージ前提を検出して事前確認する仕組みがあれば task0004 の初回失敗は防げた"
+  - "並列 codex-reviewer が共有 scratchpad の固定名 prompt.txt を奪い合い、security (codex) が 3 回連続で他観点の出力を掴んで skip した。根本原因と推奨（mktemp 必須化・出力の観点自己検証）は tmp/workflow-doctor-recommend-20260717-005354.md 参照。round 2 ではオーケストレーターがプロンプト側で mktemp 指示を注入して回避に成功 — codex-reviewer.md 本体への恒久修正が必要"
+  - "プラグインリロード前は queue_launch_guard が launched イベントを journal に書けておらず、queue_stop_guard が誤 BLOCK を繰り返した（連続ブロック上限で自然解除）。リロード後は正常動作。hook の発火条件がセッション開始時のプラグイン状態に依存する点は把握しておく価値がある"
+  - "レビュー体制（5 観点 × claude/codex + auto-fix + rework ループ）は初回実装の critical 1 / high 6 を全て回収した。特に app 層の並行性（GTK スレッド境界・generation 順序）は単一観点では見逃されがちで、クロス観点一致が確度判定に効いた"

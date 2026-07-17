@@ -1,0 +1,367 @@
+round: 1
+executed_at: "2026-07-17T00:48:54+09:00"
+scope:
+  review_mode: diff
+  base_commit: d46d499bfb4abc3ce477efcad3cb3d017e462c26
+  head_commit: e1caa7e  # integration HEAD after auto-fix loop 2
+  changed_files:
+    - cmd/data-viewer/main.go
+    - design-system/tokens.html
+    - design-system/tokens.yaml
+    - go.mod
+    - go.sum
+    - internal/app/app.go
+    - internal/app/app_test.go
+    - internal/app/events.go
+    - internal/app/reload.go
+    - internal/config/config.go
+    - internal/config/holder.go
+    - internal/config/holder_test.go
+    - internal/config/load.go
+    - internal/config/load_test.go
+    - internal/config/watcher.go
+    - internal/config/watcher_test.go
+    - internal/markup/markup.go
+    - internal/markup/markup_test.go
+    - internal/runner/event.go
+    - internal/runner/interval.go
+    - internal/runner/interval_test.go
+    - internal/runner/ringbuffer.go
+    - internal/runner/ringbuffer_test.go
+    - internal/runner/runner.go
+    - internal/runner/runner_test.go
+    - internal/runner/stream.go
+    - internal/runner/stream_test.go
+    - internal/ui/banner.go
+    - internal/ui/menu.go
+    - internal/ui/sections.go
+    - internal/ui/style.go
+    - internal/ui/style_test.go
+    - internal/ui/ui.go
+    - internal/ui/window.go
+    - test/README.md
+plan:
+  floor: [comprehensive, spec, security, performance, architecture]
+  discretionary: []
+  codex_cross_validation: true
+perspective_runs:
+  - {perspective: comprehensive, source: claude, status: completed}
+  - {perspective: spec, source: claude, status: completed}
+  - {perspective: spec, source: codex, status: completed}
+  - {perspective: security, source: claude, status: completed}
+  - {perspective: security, source: codex, status: completed}  # final pass skipped (prompt cross-contamination); rounds 1-2 completed clean
+  - {perspective: performance, source: claude, status: completed}
+  - {perspective: performance, source: codex, status: completed}
+  - {perspective: architecture, source: claude, status: completed}
+  - {perspective: architecture, source: codex, status: completed}
+findings:
+  # ---- fixed by auto-fix loop 1 (commit 05c47ec) ----
+  - stable_id: d6dd035dd566262f
+    severity: critical
+    category: spec
+    file: internal/app/app.go
+    line: 92
+    title: "初期設定がスタートアップで画面に反映されない（frame 生成前に初回 reload が no-op 化）"
+    description: "App.Run が GTK frame 生成前に初回 reload を実行し、UI メソッドが frame==nil ガードで no-op。起動直後のウィジェットが空になる。"
+    suggestion: "初回適用を GTK activate 後に遅延させる。"
+    sources: [claude:spec, codex:spec, claude:comprehensive, codex:architecture]
+    confidence: 100
+    resolution: fixed
+    resolution_reason: "loop 1: 初回 reload を dispatchOnMainLoop (glib.IdleAdd) 経由に変更。再レビュー全観点で解消確認"
+  - stable_id: 8628ccd9d3db1214
+    severity: high
+    category: architecture
+    file: internal/app/app.go
+    line: 112
+    title: "Config live-reload mutates GTK widgets off the main loop (NFR2 violation)"
+    description: "watchLoop goroutine から reload→applyConfig が GTK を直接操作。クラッシュ危険。comprehensive/architecture/spec の 3 観点が同一サイトを指摘。"
+    suggestion: "reload の UI 副作用を glib.IdleAdd 経由にする。"
+    sources: [claude:comprehensive, codex:architecture, codex:spec]
+    confidence: 95
+    resolution: fixed
+    resolution_reason: "loop 1: watchLoop の reload を dispatchOnMainLoop 経由に変更。再レビューで解消確認（後続の medium 8789fc90 が別論点として派生）"
+  - stable_id: fcee69d7f207a522
+    severity: high
+    category: performance
+    file: internal/app/events.go
+    line: 37
+    title: "GTK callback queue is unbounded during stream floods"
+    description: "イベントごとに IdleAdd を発行し、GTK が捌けないと pending コールバックが無制限に成長（OOM 危険）。"
+    suggestion: "セクションごとに pending 1 件へ coalesce。"
+    sources: [codex:performance]
+    confidence: 50
+    resolution: fixed
+    resolution_reason: "loop 1: セクション単位の coalesce を実装。再レビューで解消確認（派生 medium c405caff が残存）"
+  - stable_id: 70890daf6ab47210
+    severity: high
+    category: performance
+    file: internal/runner/stream.go
+    line: 41
+    title: "Scanner termination can make process shutdown block forever"
+    description: "stdout close 後の cmd.Wait 待ちが ctx キャンセルを見ず、Stop が永久ブロックしうる。"
+    suggestion: "ctx.Done を select で監視し、キャンセル時は graceful→kill 経路で終了。"
+    sources: [codex:performance]
+    confidence: 50
+    resolution: fixed
+    resolution_reason: "loop 1: ctx.Done を監視する select に変更。再レビューで解消確認"
+  # ---- fixed by auto-fix loop 2 (commit e1caa7e) ----
+  - stable_id: b0f986ef4e0e86e1
+    severity: high
+    category: architecture
+    file: internal/config/config.go
+    line: 51
+    title: "One content-derived key conflates section identity with execution identity"
+    description: "Key() が name/style を含まず、同一コマンド定義のセクション 2 つが衝突して片方しか表示・実行されない。"
+    suggestion: "同一性と実行指紋を分離するか Key に Name を含める。"
+    sources: [codex:architecture, codex:spec]
+    confidence: 65
+    resolution: fixed
+    resolution_reason: "loop 2: Key に Name を追加（ユーザー承認済み方針）。名前違いの衝突は解消。完全同一定義の残存衝突は e73fc29c、名前変更での再起動は e901d050 として別記録"
+  - stable_id: 38e04a8e3fa53fe0
+    severity: high
+    category: architecture
+    file: internal/app/reload.go
+    line: 30
+    title: "Config reconciliation destroys presentation state for unchanged sections"
+    description: "リロードごとに SetSections が全ウィジェットを空で再生成し、表示内容が消える（round 1 で medium→再レビューで high 昇格）。"
+    suggestion: "runner snapshot からの即時再描画または in-place 差分適用。"
+    sources: [codex:architecture, claude:spec, codex:spec]
+    confidence: 65
+    resolution: fixed
+    resolution_reason: "loop 2: rehydrateSections を追加し stream セクションを Snapshot から即時再描画（ユーザー承認済み方針）。interval 出力とエラー状態の復元は不完全 → 残存 high 2b042f9d として記録"
+  - stable_id: 18c80d07b15e9a4c
+    severity: high
+    category: architecture
+    file: internal/app/app.go
+    line: 113
+    title: "App.Run does not own cleanup for all main-loop exit paths"
+    description: "WM 経由でウィンドウを閉じる等、メニュー以外の経路で Run が戻ると watcher/子プロセスが残る。"
+    suggestion: "Run に defer Quit（sync.Once で冪等）。"
+    sources: [codex:architecture]
+    confidence: 50
+    resolution: fixed
+    resolution_reason: "loop 2: defer a.Quit() を追加。再レビュー両モデルで解消確認"
+  # ---- residual critical/high (unresolved) ----
+  - stable_id: 6d014cd3b45e2335
+    severity: high
+    category: spec
+    file: internal/ui/style.go
+    line: 35
+    title: "セクション style のキーが SPEC スキーマ（font / color）と乖離"
+    description: "SPEC Config Schema は section.style を font/color と定義するが、実装は label-*/output-* 系キーのみ受理し MergeStyle が未知キーを黙って破棄。SPEC どおりの設定が一切効かない。"
+    suggestion: "SPEC キー（font/color）を内部キーへ変換する層を追加、または SPEC スキーマを実キーに更新して合意を取る。"
+    sources: [claude:spec, codex:spec, codex:architecture]
+    confidence: 75
+    resolution: unresolved
+    resolution_reason: null
+  - stable_id: ffe893618eae5df9
+    severity: high
+    category: spec
+    file: internal/ui/ui.go
+    line: 58
+    title: "Explicit config-path invocations are forwarded to GApplication as file arguments"
+    description: "UI.Run が os.Args をそのまま GApplication(ApplicationFlagsNone) に渡すため、`data-viewer /path/config.yaml` の位置引数がファイル引数扱いされ activate が発火しない可能性（FR2 違反）。"
+    suggestion: "GtkApplication.Run には実行ファイル名のみ渡す等、アプリ固有引数を除去する。"
+    sources: [codex:spec]
+    confidence: 50
+    resolution: unresolved
+    resolution_reason: null
+  - stable_id: 2b042f9d5245580f
+    severity: high
+    category: architecture
+    file: internal/app/reload.go
+    line: 39
+    title: "Reload still discards presentation state not represented by stream snapshots"
+    description: "rehydrate は stream の通常出力のみ復元。style-only reload で interval セクションの直近出力が次 tick まで空白になり、終了済み stream のエラー表示が通常出力で上書きされて永久に失われる（FR3/FR5/FR9 に波及）。"
+    suggestion: "セクションの完全な表示状態（interval 出力・エラー状態含む）をアプリ層が保持して復元するか、UI を key 単位の in-place 差分適用にする。"
+    sources: [codex:architecture, claude:spec, codex:spec]
+    confidence: 65
+    resolution: unresolved
+    resolution_reason: null
+  # ---- residual medium (unresolved) ----
+  - stable_id: e55a59ae37149c6b
+    severity: medium
+    category: spec
+    file: internal/ui/style.go
+    line: 24
+    title: "window style の border_color / border_width が無視される"
+    description: "SPEC の window.style キー border_color/border_width が実装の frame/frame-width と不一致で反映されない。"
+    suggestion: "エイリアス変換の追加または SPEC 更新。"
+    sources: [claude:spec, codex:architecture]
+    confidence: 75
+    resolution: unresolved
+    resolution_reason: null
+  - stable_id: 16264b3ee1dc0f76
+    severity: medium
+    category: spec
+    file: internal/config/watcher.go
+    line: 90
+    title: "config ファイル削除時にエラーが表示されない"
+    description: "watcher が Remove/Rename を無視するため、削除時に SPEC Edge Case の「show error」が満たされない。"
+    suggestion: "Remove/Rename もリロード通知として扱う。"
+    sources: [claude:spec, codex:spec]
+    confidence: 95
+    resolution: unresolved
+    resolution_reason: null
+  - stable_id: c405caff81498dea
+    severity: medium
+    category: performance
+    file: internal/app/events.go
+    line: 52
+    title: "translateEvent が coalesce 判定前に全バッファをレンダリングし結果を捨てる"
+    description: "append ごとに snapshot+join+XML パースを実行してから coalesce するため、破棄される描画に O(MaxLines) の CPU を浪費。"
+    suggestion: "raw イベントを pending に持ち、dispatch コールバック内でレンダリングする（claude 側は diff 提案あり）。"
+    sources: [claude:performance, codex:performance]
+    confidence: 95
+    resolution: unresolved
+    resolution_reason: null
+  - stable_id: c26a9d93221dd23c
+    severity: medium
+    category: spec
+    file: internal/app/events.go
+    line: 56
+    title: "coalesce がエラーイベントを成功出力で上書きして FR9 のエラー表示を落としうる"
+    description: "pending が最新イベントで無条件上書きされるため、interval のエラーが次の成功 replace で表示されないまま消えることがある。"
+    suggestion: "未表示のエラーを通常更新で上書きしない。"
+    sources: [codex:spec]
+    confidence: 65
+    resolution: unresolved
+    resolution_reason: null
+  - stable_id: 8789fc90bdd0f1d1
+    severity: medium
+    category: architecture
+    file: internal/app/app.go
+    line: 96
+    title: "reload 全体（ファイル I/O・プロセス reconcile・rehydrate）が GTK メインループ上で実行される"
+    description: "loop 1 のスレッド境界修正の副作用。Runner.Apply の直列プロセス停止（grace period）等で UI が固まりうる。"
+    suggestion: "load/reconcile をバックグラウンドで行い UI 変異のみ dispatch する。"
+    sources: [codex:architecture, codex:performance]
+    confidence: 65
+    resolution: unresolved
+    resolution_reason: null
+  - stable_id: e73fc29c7e253aec
+    severity: medium
+    category: architecture
+    file: internal/config/config.go
+    line: 58
+    title: "完全同一定義（無名・同スタイル）のセクションは依然 Key 衝突する"
+    description: "Name 追加で名前違いは解消したが、完全同一エントリの衝突は残存（widget リーク 92a5f35f と同根）。"
+    suggestion: "エントリごとの一意 ID 導入、または Load で重複 Key を検証エラーにする。"
+    sources: [codex:architecture, codex:spec]
+    confidence: 65
+    resolution: unresolved
+    resolution_reason: null
+  - stable_id: e901d050d3892841
+    severity: medium
+    category: spec
+    file: internal/config/config.go
+    line: 58
+    title: "表示名の変更だけで無変更のコマンドが再起動される"
+    description: "Key に Name を含めた副作用。US2/FR3 はプロセス再起動をコマンド変更時に限定している。"
+    suggestion: "UI 同一性と実行指紋の分離。※ loop 2 でユーザーが明示承認したトレードオフ。"
+    sources: [codex:spec]
+    confidence: 50
+    resolution: declined
+    resolution_reason: "loop 2 の修正方針選択時に「名前変更でプロセス再起動」をトレードオフとしてユーザーが明示承認済み"
+  - stable_id: 79ee90b6791ed8df
+    severity: medium
+    category: performance
+    file: internal/runner/stream.go
+    line: 27
+    title: "1MiB 超の行で scanner が停止しプロセスが stranded になりうる"
+    description: "scanner.Err 未確認のまま lines を close し、子が書き込み中だと pipe で停止・キャンセルまで残留。"
+    suggestion: "scanner エラー時にプロセスを終了・回収しエラーイベントを出す。"
+    sources: [codex:performance]
+    confidence: 50
+    resolution: unresolved
+    resolution_reason: null
+  - stable_id: 2bdf9474e17c2ce9
+    severity: medium
+    category: performance
+    file: internal/runner/interval.go
+    line: 56
+    title: "interval コマンドの stdout キャプチャにサイズ上限がない"
+    description: "大量出力・無限出力コマンドでメモリが無制限に成長。"
+    suggestion: "bounded writer で上限を設け、超過時は終了+truncation エラー。"
+    sources: [codex:performance]
+    confidence: 50
+    resolution: unresolved
+    resolution_reason: null
+  - stable_id: 92a5f35f1a3803b6
+    severity: medium
+    category: performance
+    file: internal/ui/sections.go
+    line: 77
+    title: "完全同一 Key のセクションで GTK ウィジェットサブツリーがリークする"
+    description: "byKey 上書き + order 二重保持により、リロードのたびに孤児ウィジェットが線形に増える。"
+    suggestion: "Load での重複 Key 拒否、または root を独立リストで保持して確実に撤去。"
+    sources: [codex:performance, codex:spec]
+    confidence: 65
+    resolution: unresolved
+    resolution_reason: null
+  - stable_id: 39d4e01f33f7307c
+    severity: medium
+    category: architecture
+    file: internal/ui/style.go
+    line: 24
+    title: "ランタイム style キーが設定契約・デザイントークンと三重管理で乖離"
+    description: "style.go の内部キー・SPEC スキーマ・design-system/tokens.yaml が独立管理で drift（c4b46fb0 の tokens drift 指摘と同根）。"
+    suggestion: "型付き style 契約を単一の正とし、変換とコントラクトテストを追加。"
+    sources: [codex:architecture, claude:architecture]
+    confidence: 75
+    resolution: unresolved
+    resolution_reason: null
+  - stable_id: 81e6ac3cd113fd5e
+    severity: medium
+    category: spec
+    file: internal/markup/markup.go
+    line: 14
+    title: "XML well-formedness を Pango 妥当性と見なしており、Pango が拒否する markup が素通りする"
+    description: "未知属性付き span 等が valid 扱いになり FR6 のフォールバックが働かない。"
+    suggestion: "Pango 文法（許可属性・値制約）まで検証するか、GTK 側でのフォールバックを追加。"
+    sources: [codex:spec]
+    confidence: 50
+    resolution: unresolved
+    resolution_reason: null
+  - stable_id: 1da5aded1a6cc024
+    severity: medium
+    category: comprehensive
+    file: internal/config/load.go
+    line: 138
+    title: "interval に 0 以下の duration を許し、黙って one-shot 実行に化ける"
+    description: "time.ParseDuration は 0s/-5s を受理し、interval<=0 は一回実行+待機になる。"
+    suggestion: "d <= 0 を検証エラーにする（diff 提案あり）。"
+    sources: [claude:comprehensive]
+    confidence: 65
+    resolution: unresolved
+    resolution_reason: null
+  - stable_id: 37eb2a866b8f7239
+    severity: medium
+    category: architecture
+    file: internal/app/reload.go
+    line: 12
+    title: "config.Holder が本番コードで write-only（last-good の実体と乖離）"
+    description: "Holder は Update されるのみで Config()/Err() は本番未使用。last-good の実体は UI/runner の生存状態。"
+    suggestion: "Holder を撤去するか、reload 経路の単一の正にする。"
+    sources: [claude:architecture]
+    confidence: 60
+    resolution: unresolved
+    resolution_reason: null
+  - stable_id: c4b46fb04993ee7e
+    severity: medium
+    category: architecture
+    file: internal/ui/style.go
+    line: 24
+    title: "デザイントークンの値が style.go に手書き複製され tokens.yaml と drift しうる"
+    description: "tokens.html は tokens.yaml を SSOT と宣言するが、ランタイム既定値は独立した手書きコピー。"
+    suggestion: "生成リンクの追加、または tokens.yaml と一致を検証するテスト。"
+    sources: [claude:architecture]
+    confidence: 60
+    resolution: unresolved
+    resolution_reason: null
+auto_fix:
+  loops_run: 2
+  applied_total: 7
+  termination: no-progress  # 残存 critical/high は spec カテゴリ（auto-fix 対象外）または単一ファイル修正で完結しない構造的修正のみ
+residual_critical_high: 3
+rework_required: true  # ユーザー判断: implement へ rework（残存 high 3 件 + 関連 medium を再計画で回収）

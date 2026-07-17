@@ -79,6 +79,27 @@ spacing unit 6px, output monospace 12pt, error #e57373, error banner surface
 config style values override these at runtime. Affected: task0004 (single
 place: a defaults table in the ui package).
 
+## Rework Round 1 — Cross-task Decisions (tasks 0006–0009)
+
+Source: residual findings in `reviews/round1.yaml` (rework decision).
+
+### SPEC config style keys are the public contract
+Window `background` / `border_color` / `border_width` and section `font` /
+`color` (SPEC Config Schema) must take effect; internal role-based keys stay
+as a superset, translated in the ui layer (task0006). No other task may
+invent additional public style keys.
+
+### Duplicate section keys are configuration errors
+`config.Load` rejects two sections with identical `Key()` (task0009).
+Downstream components (runner, ui, app) may assume key uniqueness.
+
+### Reload pipeline: background work + UI-only dispatch
+Load / holder update / runner reconcile run OFF the GTK main loop; only UI
+mutations are dispatched onto it. The app layer owns a per-section
+presentation store (latest rendered text + error flag) used to fully
+rehydrate rebuilt widgets (task0008). Tasks 0006/0007/0009 must not add UI
+calls outside this dispatch discipline.
+
 ## Risk Assessment
 
 | Risk | Likelihood | Impact | Mitigation |

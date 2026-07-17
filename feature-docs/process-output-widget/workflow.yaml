@@ -28,16 +28,21 @@ workflow:
     status: completed
     completed_at_commit: d46d499bfb4abc3ce477efcad3cb3d017e462c26
   - id: implement
-    status: pending
-    base_commit: null
+    status: completed
+    completed_at_commit: b63553c8225a612139af50fee42f1c0b172d1bc3
+    base_commit: d46d499bfb4abc3ce477efcad3cb3d017e462c26
   - id: review
-    status: pending
+    status: completed
+    completed_at_commit: 7745bca00d321406e08c3fd216f68238d5ac58f4
   - id: verify
-    status: pending
-    result: null
+    status: completed
+    completed_at_commit: 7745bca00d321406e08c3fd216f68238d5ac58f4
+    result: pass
     failed_items: []
+    notes: "Automated: build OK (benign gotk4 cgo warnings only), go test ./... all packages pass (TS-1..TS-13 covered), gofmt clean (SC-4). No excluded requirements. Manual scenarios M-1..M-3 (GNOME/Wayland launch/drag/reload/quit + mockup visual comparison) remain for human verification — not automatable per test/README.md."
   - id: retrospect
-    status: pending
+    status: completed
+    completed_at_commit: 7745bca00d321406e08c3fd216f68238d5ac58f4
 
 tasks:
   task0001:
@@ -57,8 +62,9 @@ tasks:
     domains: [input-handling, external-io]
     complexity: medium
     requirements: [FR2, FR3, FR9, NFR3]
-    status: pending
+    status: merged
     notes: null
+    branch: em-workflow/process-output-widget/task0001
   task0002:
     title: "runner package: process lifecycle, interval/stream, reconcile"
     plan: tasks/task0002.md
@@ -78,8 +84,9 @@ tasks:
     domains: [concurrency, external-io]
     complexity: high
     requirements: [FR3, FR4, FR5, FR9, NFR2, NFR3]
-    status: pending
-    notes: null
+    status: merged
+    notes: "Contract clarification: runner must not import internal/config (layer rule), so Apply takes package-local runner.SectionConfig; app layer (task0005) converts config.SectionConfig -> runner.SectionConfig."
+    branch: em-workflow/process-output-widget/task0002
   task0003:
     title: "markup package: Pango validation + escape fallback"
     plan: tasks/task0003.md
@@ -92,8 +99,9 @@ tasks:
     domains: [input-handling]
     complexity: low
     requirements: [FR6, NFR3]
-    status: pending
+    status: merged
     notes: null
+    branch: em-workflow/process-output-widget/task0003
   task0004:
     title: "ui package: GTK window, frame, sections, drag, menu, banner"
     plan: tasks/task0004.md
@@ -111,8 +119,9 @@ tasks:
     domains: [ui]
     complexity: high
     requirements: [FR1, FR6, FR7, FR8, FR9, NFR1]
-    status: pending
-    notes: null
+    status: merged
+    notes: "Merged on retry after GTK4 dev headers were installed; zero code changes needed, go.mod conflict resolved via parent-side adoption."
+    branch: em-workflow/process-output-widget/task0004
   task0005:
     title: "app wiring + entry point: config → runner → UI"
     plan: tasks/task0005.md
@@ -128,12 +137,89 @@ tasks:
     domains: [concurrency, ui, input-handling]
     complexity: high
     requirements: [FR2, FR3, FR8, FR9, NFR2]
-    status: pending
+    status: merged
+    notes: "Merged on retry after siblings landed; fast-forward, no conflicts. First attempt failed on missing sibling packages (parallel-dispatch dependency gap — feed to retrospect)."
+    branch: em-workflow/process-output-widget/task0005
+  task0006:
+    title: "style contract alignment: SPEC keys -> internal styling"
+    plan: tasks/task0006.md
+    files:
+      - internal/ui/style.go
+      - internal/ui/style_test.go
+    skills: [design-impl]
+    domains: [ui, input-handling]
+    complexity: medium
+    requirements: [FR3, NFR3]
+    status: merged
     notes: null
+    branch: em-workflow/process-output-widget/task0006
+  task0007:
+    title: "CLI argument handling vs GApplication activation"
+    plan: tasks/task0007.md
+    files:
+      - internal/ui/ui.go
+      - cmd/data-viewer/main.go
+    skills: [frontend-impl]
+    domains: [ui, input-handling]
+    complexity: low
+    requirements: [FR2]
+    status: merged
+    notes: null
+    branch: em-workflow/process-output-widget/task0007
+  task0008:
+    title: "reload pipeline & presentation state (app layer)"
+    plan: tasks/task0008.md
+    files:
+      - internal/app/app.go
+      - internal/app/events.go
+      - internal/app/reload.go
+      - internal/app/app_test.go
+      - internal/config/holder.go
+      - internal/config/holder_test.go
+    skills: [frontend-impl]
+    domains: [ui, concurrency]
+    complexity: high
+    requirements: [FR3, FR9, NFR2]
+    status: merged
+    notes: null
+    branch: em-workflow/process-output-widget/task0008
+  task0009:
+    title: "config/runner/markup robustness"
+    plan: tasks/task0009.md
+    files:
+      - internal/config/watcher.go
+      - internal/config/watcher_test.go
+      - internal/config/load.go
+      - internal/config/load_test.go
+      - internal/runner/interval.go
+      - internal/runner/interval_test.go
+      - internal/runner/stream.go
+      - internal/runner/stream_test.go
+      - internal/markup/markup.go
+      - internal/markup/markup_test.go
+    skills: [backend-impl]
+    domains: [input-handling, external-io, concurrency]
+    complexity: medium
+    requirements: [FR4, FR5, FR6, FR9, NFR2]
+    status: merged
+    notes: null
+    branch: em-workflow/process-output-widget/task0009
 
 review:
-  status: pending
-  rounds_completed: 0
+  status: completed
+  rounds_completed: 2
+  plan:
+    floor: [comprehensive, spec, security, performance, architecture]
+    discretionary: []
+    codex_cross_validation: true
+  perspectives:
+    comprehensive: completed
+    spec: completed
+    security: completed
+    performance: completed
+    architecture: completed
+  residual_critical_high: 0
+  needs_rework: false
 
 requirements:
   FR1:
@@ -146,32 +232,32 @@ requirements:
     title: "YAML config from XDG path with CLI override"
     status: ok
     tbd_reason: null
-    tasks: [task0001, task0005]
+    tasks: [task0001, task0005, task0007]
     tests: [TS-1, M-1]
   FR3:
     title: "Hot-reload of all settings (styles + command reconcile)"
     status: ok
     tbd_reason: null
-    tasks: [task0001, task0002, task0005]
-    tests: [TS-3, TS-4, M-2]
+    tasks: [task0001, task0002, task0005, task0006, task0008]
+    tests: [TS-3, TS-4, TS-8, TS-12, M-2]
   FR4:
     title: "Interval mode: periodic run, replace section content"
     status: ok
     tbd_reason: null
-    tasks: [task0002]
-    tests: [TS-5]
+    tasks: [task0002, task0009]
+    tests: [TS-5, TS-10]
   FR5:
     title: "Stream mode: long-running process, append lines with limit"
     status: ok
     tbd_reason: null
-    tasks: [task0002]
-    tests: [TS-5, TS-6]
+    tasks: [task0002, task0009]
+    tests: [TS-5, TS-6, TS-11]
   FR6:
     title: "Pango markup rendering with plain-text fallback"
     status: ok
     tbd_reason: null
-    tasks: [task0003, task0004]
-    tests: [TS-7, M-1]
+    tasks: [task0003, task0004, task0009]
+    tests: [TS-7, TS-13, M-1]
   FR7:
     title: "Multiple sections stacked in one window"
     status: ok
@@ -188,8 +274,8 @@ requirements:
     title: "Error handling: last-good config, per-section command errors"
     status: ok
     tbd_reason: null
-    tasks: [task0001, task0002, task0004, task0005]
-    tests: [TS-2, TS-6, M-2]
+    tasks: [task0001, task0002, task0004, task0005, task0008, task0009]
+    tests: [TS-2, TS-6, TS-9, TS-12, M-2]
   NFR1:
     title: "Platform: Ubuntu / GNOME / Wayland, GTK4 via gotk4"
     status: ok
@@ -200,11 +286,11 @@ requirements:
     title: "Performance: ~1s reload, bounded stream memory, UI on main loop"
     status: ok
     tbd_reason: null
-    tasks: [task0002, task0005]
-    tests: [TS-5, M-2]
+    tasks: [task0002, task0005, task0008, task0009]
+    tests: [TS-5, TS-10, TS-12, M-2]
   NFR3:
     title: "Testability: logic packages free of gotk4, covered by go test"
     status: ok
     tbd_reason: null
-    tasks: [task0001, task0002, task0003]
-    tests: [TS-1, TS-2, TS-3, TS-4, TS-5, TS-6, TS-7]
+    tasks: [task0001, task0002, task0003, task0006, task0008, task0009]
+    tests: [TS-1, TS-2, TS-3, TS-4, TS-5, TS-6, TS-7, TS-8, TS-9, TS-10, TS-11, TS-12, TS-13]

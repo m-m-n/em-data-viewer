@@ -1,0 +1,205 @@
+round: 2
+executed_at: "2026-07-17T12:03:03+09:00"
+scope:
+  review_mode: diff
+  base_commit: d46d499bfb4abc3ce477efcad3cb3d017e462c26
+  head_commit: 7745bca00d321406e08c3fd216f68238d5ac58f4  # after round-2 auto-fix loop 1
+  changed_files:
+    - cmd/data-viewer/main.go
+    - design-system/tokens.html
+    - design-system/tokens.yaml
+    - go.mod
+    - go.sum
+    - internal/app/app.go
+    - internal/app/app_test.go
+    - internal/app/events.go
+    - internal/app/reload.go
+    - internal/config/config.go
+    - internal/config/holder.go
+    - internal/config/holder_test.go
+    - internal/config/load.go
+    - internal/config/load_test.go
+    - internal/config/watcher.go
+    - internal/config/watcher_test.go
+    - internal/markup/markup.go
+    - internal/markup/markup_test.go
+    - internal/runner/event.go
+    - internal/runner/interval.go
+    - internal/runner/interval_test.go
+    - internal/runner/ringbuffer.go
+    - internal/runner/ringbuffer_test.go
+    - internal/runner/runner.go
+    - internal/runner/runner_test.go
+    - internal/runner/stream.go
+    - internal/runner/stream_test.go
+    - internal/ui/banner.go
+    - internal/ui/menu.go
+    - internal/ui/sections.go
+    - internal/ui/style.go
+    - internal/ui/style_test.go
+    - internal/ui/ui.go
+    - internal/ui/ui_test.go
+    - internal/ui/window.go
+    - test/README.md
+plan:
+  floor: [comprehensive, spec, security, performance, architecture]
+  discretionary: []
+  codex_cross_validation: true
+perspective_runs:
+  - {perspective: comprehensive, source: claude, status: completed}
+  - {perspective: spec, source: claude, status: completed}
+  - {perspective: spec, source: codex, status: completed}
+  - {perspective: security, source: claude, status: completed}
+  - {perspective: security, source: codex, status: completed}
+  - {perspective: performance, source: claude, status: completed}
+  - {perspective: performance, source: codex, status: completed}
+  - {perspective: architecture, source: claude, status: completed}
+  - {perspective: architecture, source: codex, status: completed}
+notes: >
+  Rework verification round. All round-1 residual highs confirmed resolved by
+  tasks task0006-task0009 (SPEC style-key translation + token drift guard;
+  CLI args no longer forwarded to GApplication; presentation store restores
+  interval output and error states; watcher Remove/Rename; bounded capture;
+  duplicate-key validation; span attribute whitelist). Codex prompt-file
+  isolation (mktemp) applied — no cross-contamination this round.
+findings:
+  # ---- fixed by round-2 auto-fix loop 1 (commit 7745bca) ----
+  - stable_id: r2-generation-race
+    severity: high
+    category: architecture
+    file: internal/app/app.go
+    line: 105
+    title: "Reload generations do not protect the authoritative commit"
+    description: "起動時 reload と watcher reload が並行し、holder 更新と runner.Apply が generation ゲート外で実行されるため、古い reload が新しい状態を上書きしうる（UI は新設定・runner は旧プロセスの恒久乖離）。comprehensive/spec も同一競合を medium で指摘（クロス確認）。"
+    suggestion: "全 reload トランザクションを単一ワーカーに直列化する。"
+    sources: [codex:architecture, claude:comprehensive, codex:spec]
+    confidence: 65
+    resolution: fixed
+    resolution_reason: "loop 1: 全 reload を単一 reloadLoop goroutine + トリガーチャネルに直列化（ユーザー承認済み方針）。comprehensive / architecture claude / architecture codex の 3 者が解消を独立確認"
+  # ---- residual medium (unresolved) ----
+  - stable_id: r2-rehydrate-ordering
+    severity: medium
+    category: architecture
+    file: internal/app/reload.go
+    line: 88
+    title: "rehydrate スナップショットを dispatch コールバック外で取得しており、直後のイベントを stale に上書きしうる"
+    description: "rehydrationsFor が reloadLoop goroutine 上で store を読むため、reload コールバック実行前に走ったイベントコールバックの新しい出力を古いスナップショットで上書きしうる。architecture claude は具体 diff（rehydrations 取得を SetSections 直後に移動）を提案済み。"
+    suggestion: "store の読み取りを dispatch されたコールバック内（SetSections 直後）へ移す。"
+    sources: [claude:architecture, codex:architecture, codex:spec]
+    confidence: 100
+    resolution: unresolved
+    resolution_reason: null
+  - stable_id: r2-store-lifecycle
+    severity: medium
+    category: architecture
+    file: internal/app/events.go
+    line: 50
+    title: "sectionStore に削除/リネームされたセクションのエントリが残り続ける（無制限成長）"
+    description: "set のみで eviction が無く、キー変更のたびに旧エントリが永久残留。同一キー再追加時に前世代の出力/エラーが rehydrate される問題も。performance 両モデルも同根を指摘（events.go:61）。"
+    suggestion: "成功 reload ごとに live キー集合で store.retain() する。"
+    sources: [claude:architecture, codex:architecture, claude:performance, codex:performance]
+    confidence: 95
+    resolution: unresolved
+    resolution_reason: null
+  - stable_id: r2-runner-mutex
+    severity: medium
+    category: performance
+    file: internal/runner/runner.go
+    line: 82
+    title: "Apply が r.mu を保持したまま子プロセス終了を直列に待ち、GTK 上の Snapshot を停止させうる"
+    description: "削除 N セクション × 最大 200ms grace の間、mutex を共有する Snapshot（append 描画経路 = GTK メインループ）がブロックされる。"
+    suggestion: "Stop() と同じパターンで、ロック内で除去セットを確定→ロック解放後に一括 cancel & wait。"
+    sources: [claude:performance, codex:performance]
+    confidence: 95
+    resolution: unresolved
+    resolution_reason: null
+  - stable_id: r2-mode-cast
+    severity: medium
+    category: architecture
+    file: internal/app/reload.go
+    line: 164
+    title: "config→runner の Mode 変換が無防備な文字列キャストで、将来の drift 時に静かに interval へ縮退する"
+    description: "両パッケージが同名の Mode 定数を独立定義し、橋渡しは runner.Mode(s.Mode) のみ。"
+    suggestion: "明示的な全域マッピング（switch + 不明値は fail loud）またはガードテスト追加。"
+    sources: [claude:architecture]
+    confidence: 60
+    resolution: unresolved
+    resolution_reason: null
+  - stable_id: r2-dup-reject-spec
+    severity: medium
+    category: spec
+    file: internal/config/load.go
+    line: 105
+    title: "重複セクション拒否が SPEC の検証エラー列挙・FR7・スキーマ（name 任意）と乖離"
+    description: "完全同一のセクション 2 つは SPEC 上有効だが Load が全体を拒否する。task0009 で導入した設計判断と SPEC の文言が未整合。"
+    suggestion: "SPEC の検証エラー一覧に重複拒否を追記して合意を取るか、出現順序で一意化する。"
+    sources: [claude:spec]
+    confidence: 60
+    resolution: unresolved
+    resolution_reason: null
+  - stable_id: r2-markup-values
+    severity: medium
+    category: spec
+    file: internal/markup/markup.go
+    line: 91
+    title: "span 属性の値が未検証で、値不正な markup が FR6 のフォールバックを迂回する"
+    description: "属性名のみホワイトリスト検証。foreground=\"notacolor\" 等は valid 扱いで GTK に渡り Pango が拒否、エスケープ表示にならない。"
+    suggestion: "値文法の近似検証、または ui 層で SetMarkup 失敗時に SetText へフォールバック。"
+    sources: [claude:spec, codex:spec]
+    confidence: 95
+    resolution: unresolved
+    resolution_reason: null
+  - stable_id: r2-interval-cap
+    severity: medium
+    category: spec
+    file: internal/runner/interval.go
+    line: 129
+    title: "interval 出力の 1MiB 上限が FR4「capture full stdout」と乖離"
+    description: "task0009 の bounded capture 導入により、1MiB 超の正当な出力がエラー表示に置き換わる。SPEC に上限の規定なし。"
+    suggestion: "上限撤廃か、SPEC に上限と error semantics を明文化して整合させる。"
+    sources: [claude:spec, codex:spec]
+    confidence: 95
+    resolution: unresolved
+    resolution_reason: null
+  - stable_id: r2-watchloop-shutdown
+    severity: medium
+    category: architecture
+    file: internal/app/app.go
+    line: 162
+    title: "watchLoop が shutdown を観測できず、Quit 後も goroutine が App を保持し続けうる"
+    description: "Notify チャネルの close は Watcher インターフェースの契約に無く、watchLoop は a.done を select していない。"
+    suggestion: "Notify と a.done の両方を select し、WaitGroup で join する。"
+    sources: [codex:architecture]
+    confidence: 50
+    resolution: unresolved
+    resolution_reason: null
+  - stable_id: r2-watcher-window
+    severity: medium
+    category: architecture
+    file: internal/app/app.go
+    line: 112
+    title: "初回 load 後に watcher を設置するため、その間の設定変更が観測されない窓がある"
+    description: "初回 read と watch 設置の間に編集されると次の編集まで stale。"
+    suggestion: "watcher 設置を初回 load より先に行う。"
+    sources: [codex:architecture]
+    confidence: 50
+    resolution: unresolved
+    resolution_reason: null
+  - stable_id: r2-lineheight-drop
+    severity: medium
+    category: architecture
+    file: internal/ui/style.go
+    line: 184
+    title: "tokens.yaml の line-height がランタイム CSS と drift ガードの双方から漏れている"
+    description: "typography トークンの line-height が sectionCSS に反映されず、drift テストのモデルにも含まれない。"
+    suggestion: "line-height をランタイムスタイルと drift ガードに追加する。"
+    sources: [codex:architecture]
+    confidence: 50
+    resolution: unresolved
+    resolution_reason: null
+auto_fix:
+  loops_run: 1
+  applied_total: 1
+  termination: clean
+residual_critical_high: 0
+rework_required: false
