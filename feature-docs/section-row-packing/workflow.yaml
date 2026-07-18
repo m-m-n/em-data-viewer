@@ -1,0 +1,110 @@
+schema_version: 1
+feature: section-row-packing
+created: 2026-07-18
+base_branch: main
+parent_branch: em-workflow/section-row-packing/integration
+
+project:
+  license: none
+  components:
+    main:
+      language: go
+      build_command: "go build ./..."
+      test_command: "go test ./..."
+      format_command: "gofmt -l -w ."
+      e2e_test_command: ""
+
+workflow:
+  - id: create-spec
+    artifacts: [REQUIREMENTS.md, SPEC.md]
+    status: completed
+    completed_at_commit: d6ee33ab5a3983179bc14e20b3fbe5e56b1efb35
+  - id: design
+    artifacts: [DESIGN.md, design/]
+    status: skipped
+    skipped_reason: "レイアウトアルゴリズムの変更のみ。間隔・見た目の決定は既存トークンと前 feature の合意を踏襲し、新規の視覚的決定はない"
+  - id: create-plan
+    artifacts: [IMPLEMENTATION.md, VERIFICATION.md, tasks/]
+    status: completed
+    completed_at_commit: d6ee33ab5a3983179bc14e20b3fbe5e56b1efb35
+  - id: implement
+    status: pending
+  - id: review
+    status: pending
+  - id: verify
+    status: pending
+    result: null
+    failed_items: []
+  - id: retrospect
+    status: pending
+
+tasks:
+  task0001:
+    title: "Greedy row-packing sections layout"
+    plan: tasks/task0001.md
+    files:
+      - internal/ui/sections.go
+      - internal/ui/sections_test.go
+      - internal/ui/style.go
+      - internal/ui/style_test.go
+      - internal/ui/window.go
+    skills: [design-impl]
+    domains: [ui]
+    complexity: medium
+    requirements: [FR1, FR2, FR3, FR4, FR5, FR6, NFR1, NFR2]
+    status: pending
+    notes: null
+
+review:
+  status: pending
+  rounds_completed: 0
+
+requirements:
+  FR1:
+    title: "Vertical box of greedy-packed row boxes replaces FlowBox"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [M-1]
+  FR2:
+    title: "Pure packRows function computes row assignment"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-1, TS-2, TS-3]
+  FR3:
+    title: "Packing uses natural widths; oversize section gets own row"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-3, E-1]
+  FR4:
+    title: "Reflow on rebuild/update/resize/map; skip when assignment unchanged"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-1, M-2, M-3]
+  FR5:
+    title: "Spacing 12px/0 kept; FlowBox and flowboxchild reset removed"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-4, TS-5, M-4]
+  FR6:
+    title: "Existing reload/update/styling/error behaviors preserved"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-5, TS-6, M-3, E-2]
+  NFR1:
+    title: "No new external dependencies"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [M-5]
+  NFR2:
+    title: "Build, tests, gofmt clean"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-6]
