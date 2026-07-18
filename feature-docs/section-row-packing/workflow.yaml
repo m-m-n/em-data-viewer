@@ -28,15 +28,21 @@ workflow:
     status: completed
     completed_at_commit: d6ee33ab5a3983179bc14e20b3fbe5e56b1efb35
   - id: implement
-    status: pending
+    status: completed
+    completed_at_commit: 1dd0d1ef5d59c98f70cfe8398157cf67748ac664
+    base_commit: d6ee33ab5a3983179bc14e20b3fbe5e56b1efb35
   - id: review
-    status: pending
+    status: completed
+    completed_at_commit: 1dd0d1ef5d59c98f70cfe8398157cf67748ac664
   - id: verify
-    status: pending
-    result: null
+    status: completed
+    completed_at_commit: 1dd0d1ef5d59c98f70cfe8398157cf67748ac664
+    result: pass
     failed_items: []
+    notes: "Automated: build OK (benign gotk4 cgo warnings only), go test ./... all packages pass (TS-1..TS-6), gofmt clean (SC-5), flowboxchild absent from sources (TS-4 also unit-tested), tokens/go.mod/go.sum unchanged (M-4, M-5). No excluded requirements. Manual GUI scenarios M-1..M-3 / E-1..E-2 (natural-width packing, resize repack, reload/error/style, oversize section, empty config) remain for human verification — not automatable per test/README.md. Review round 1 left 3 medium findings (unresolved, recorded in reviews/round1.yaml)."
   - id: retrospect
-    status: pending
+    status: completed
+    completed_at_commit: 1dd0d1ef5d59c98f70cfe8398157cf67748ac664
 
 tasks:
   task0001:
@@ -52,12 +58,25 @@ tasks:
     domains: [ui]
     complexity: medium
     requirements: [FR1, FR2, FR3, FR4, FR5, FR6, NFR1, NFR2]
-    status: pending
+    status: merged
     notes: null
+    branch: em-workflow/section-row-packing/task0001
 
 review:
-  status: pending
-  rounds_completed: 0
+  status: completed
+  rounds_completed: 1
+  perspectives:
+    comprehensive: completed
+    spec: completed
+    performance: completed
+  residual_critical_high: 0
+  needs_rework: false
+  plan:
+    floor: [comprehensive, spec]
+    discretionary:
+      - perspective: performance
+        reason: "updateSection ごとに全セクションの Measure と行割当計算が走る設計のため、高頻度更新時のコストと再構築チャーンを確認する"
+    codex_cross_validation: false
 
 requirements:
   FR1:

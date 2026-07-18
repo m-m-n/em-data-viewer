@@ -1,0 +1,14 @@
+feature: section-row-packing
+collected_at: "2026-07-18T21:38:00+09:00"
+session_ids: [39437522-a93d-4242-b598-9266b32facf8]
+signals:
+  review_critical_high: []
+  conflict_reworks: []
+  file_prediction_misses: []
+  verification_failures: []
+  discretionary_perspectives:
+    - perspective: performance
+      reason: "updateSection ごとに全セクションの Measure と行割当計算が走る設計のため、高頻度更新時のコストと再構築チャーンを確認する"
+  declined_findings: []
+lessons_candidates:
+  - "GtkFlowBox は homogeneous=false でも列揃えグリッド (fit_aligned_item_requests)。flex-wrap 的な自然幅詰めには使えない — レイアウト系ウィジェット選定時は GTK ソースの allocate 実装まで確認する価値がある"

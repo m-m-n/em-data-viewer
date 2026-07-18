@@ -1,0 +1,65 @@
+round: 1
+executed_at: "2026-07-18T21:35:20+09:00"
+scope:
+  review_mode: diff
+  base_commit: d6ee33ab5a3983179bc14e20b3fbe5e56b1efb35
+  head_commit: 1dd0d1ef5d59c98f70cfe8398157cf67748ac664
+  changed_files:
+    - internal/ui/sections.go
+    - internal/ui/sections_test.go
+    - internal/ui/style.go
+    - internal/ui/style_test.go
+    - internal/ui/window.go
+plan:
+  floor: [comprehensive, spec]
+  discretionary:
+    - perspective: performance
+      reason: "updateSection ごとに全セクションの Measure と行割当計算が走る設計のため、高頻度更新時のコストと再構築チャーンを確認する"
+  codex_cross_validation: false
+perspective_runs:
+  - {perspective: comprehensive, source: claude, status: completed}
+  - {perspective: spec, source: claude, status: completed}
+  - {perspective: performance, source: claude, status: completed}
+findings:
+  - stable_id: 30da8b34fb9eafb3
+    severity: medium
+    category: comprehensive
+    file: internal/ui/sections.go
+    line: 101
+    title: "reflow measures section widths before the new per-section stylesheet is applied"
+    description: "setSections() ends with sv.reflow(), but the caller UI.SetSections runs setSections() before restyle(). New sections get fresh dv-section-<n> classes that have no rule in the currently-loaded stylesheet, so reflow measures them with the default font; restyle() then changes font-family/font-size, altering real widths, and nothing reflows afterward. On a config reload that changes section font metrics (window width unchanged), rows stay packed for the wrong widths until the next updateSection or resize. Startup is masked by the map-triggered reflow; interval/stream sections self-correct on their next update; a static section with no follow-up update stays mis-packed. Regression vs FlowBox, which re-wrapped at layout time under current CSS."
+    suggestion: "Ensure a reflow runs after the new stylesheet is loaded: either move the reflow out of setSections and have UI.SetSections orchestrate setSections() -> restyle() -> reflow(), or add a trailing sections.reflow() after restyle() in UI.SetSections."
+    sources: [claude:comprehensive]
+    confidence: 60
+    resolution: unresolved
+    resolution_reason: "severity medium は auto-fix ゲート対象外。ユーザー判断待ち"
+  - stable_id: 52beb7b55cea8df9
+    severity: medium
+    category: performance
+    file: internal/ui/sections.go
+    line: 124
+    title: "updateSection の逐次 reflow がリロード時に O(n^2) の再パック・全行ウィジェット再構築を誘発する"
+    description: "updateSection が毎回同期的に reflow を呼び、reflow は全セクションを Measure し割当が変わると rebuildRows で全 root を再ペアレントする。リロード経路 (internal/app/reload.go) は SetSections の直後に rehydration で UpdateSection をループ実行するため、n セクションに対し最大 n+1 回の reflow (Measure O(n^2)) と最大 n 回の全行再構築が走る。1 回の最終 reflow で足りる処理を毎リロードで繰り返し、ちらつきと無駄な再レイアウトの原因になる。"
+    suggestion: "reflow をコアレスする: pending フラグ + glib.IdleAdd で 1 メインループ反復あたり 1 回に畳み込む、または rehydration ループ中は per-call reflow を抑止しループ後に 1 回だけ reflow する。"
+    sources: [claude:performance]
+    confidence: 60
+    resolution: unresolved
+    resolution_reason: "severity medium は auto-fix ゲート対象外。ユーザー判断待ち"
+  - stable_id: 6c2ab2e930f9f30b
+    severity: medium
+    category: performance
+    file: internal/ui/window.go
+    line: 94
+    title: "default-width notify ごとに reflow を無制限にスケジュールし、リサイズ中に冗長な全再構築が積み上がる"
+    description: "NotifyProperty(\"default-width\") ハンドラがコアレス無しで毎回 glib.IdleAdd(sv.reflow) を積む。GTK4 の default-width はインタラクティブリサイズ中に繰り返し notify するため、idle がドレインされる前に複数 notify が来るとその数だけ reflow がキューされ、ドラッグ中に全ウィジェット再構築が重複してメインスレッドで走りうる。重複数はメインループのタイミング依存 (確度中)。"
+    suggestion: "reflow スケジュールを単一フライト化する: sectionsView に pending bool を持たせ、キュー済みならスキップし、実行時にフラグを落とす。finding 52beb7b55cea8df9 と同じ pending+IdleAdd 機構で同時に解決できる。"
+    sources: [claude:performance]
+    confidence: 60
+    resolution: unresolved
+    resolution_reason: "severity medium は auto-fix ゲート対象外。ユーザー判断待ち"
+auto_fix:
+  loops_run: 0
+  applied_total: 0
+  termination: clean
+residual_critical_high: 0
+rework_required: false
