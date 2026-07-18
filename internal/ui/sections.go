@@ -27,7 +27,7 @@ type sectionWidgets struct {
 }
 
 // sectionsView manages the vertical stack of sections inside the window
-// (12px gaps, no divider lines).
+// (no gaps, no divider lines).
 type sectionsView struct {
 	widget *gtk.Box
 	order  []string

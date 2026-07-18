@@ -33,7 +33,7 @@ typography:
 spacing:
   unit:
     value: "6px"
-    description: "全スペーシングはこの倍数。ウィンドウ内周パディング 2 unit、セクション間 2 unit、ラベルと出力の間 1 unit。恣意的な中間値を作らない"
+    description: "全スペーシングはこの倍数。ウィンドウ内周パディング 2 unit、セクション間 0、ラベルと出力の間 1 unit。恣意的な中間値を作らない"
 
 radius:
   window:

@@ -14,7 +14,7 @@ import (
 const (
 	spacingUnit    = 6 // px
 	windowPadding  = 2 * spacingUnit
-	sectionGap     = 2 * spacingUnit
+	sectionGap     = 0
 	labelOutputGap = 1 * spacingUnit
 )
 
