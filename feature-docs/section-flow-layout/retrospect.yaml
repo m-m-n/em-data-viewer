@@ -1,0 +1,11 @@
+feature: section-flow-layout
+collected_at: "2026-07-18T20:29:00+09:00"
+session_ids: [39437522-a93d-4242-b598-9266b32facf8]
+signals:
+  review_critical_high: []
+  conflict_reworks: []
+  file_prediction_misses: []
+  verification_failures: []
+  discretionary_perspectives: []
+  declined_findings: []
+lessons_candidates: []

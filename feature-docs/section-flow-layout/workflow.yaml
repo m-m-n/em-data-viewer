@@ -28,15 +28,21 @@ workflow:
     status: completed
     completed_at_commit: 14a1f95a9de06827028c5539b77dc81fafd88618
   - id: implement
-    status: pending
+    status: completed
+    completed_at_commit: 87e68ff824c4d98bc8d8f727e2124015b298e331
+    base_commit: 14a1f95a9de06827028c5539b77dc81fafd88618
   - id: review
-    status: pending
+    status: completed
+    completed_at_commit: 87e68ff824c4d98bc8d8f727e2124015b298e331
   - id: verify
-    status: pending
-    result: null
+    status: completed
+    completed_at_commit: 87e68ff824c4d98bc8d8f727e2124015b298e331
+    result: pass
     failed_items: []
+    notes: "Automated: build OK (benign gotk4 cgo warnings only), go test ./... all packages pass (TS-1..TS-3), gofmt clean (SC-4), tokens wording verified (M-4), go.mod/go.sum unchanged (M-5). No excluded requirements. Manual GUI scenarios M-1..M-3 / E-1..E-2 (wrapping at width 800, reload, error/style rendering, narrow-window wide section, empty config) remain for human verification — not automatable per test/README.md."
   - id: retrospect
-    status: pending
+    status: completed
+    completed_at_commit: 87e68ff824c4d98bc8d8f727e2124015b298e331
 
 tasks:
   task0001:
@@ -52,12 +58,22 @@ tasks:
     domains: [ui]
     complexity: medium
     requirements: [FR1, FR2, FR3, FR4, FR5, NFR1, NFR2]
-    status: pending
+    status: merged
     notes: null
+    branch: em-workflow/section-flow-layout/task0001
 
 review:
-  status: pending
-  rounds_completed: 0
+  status: completed
+  rounds_completed: 1
+  plan:
+    floor: [comprehensive, spec]
+    discretionary: []
+    codex_cross_validation: false
+  perspectives:
+    comprehensive: completed
+    spec: completed
+  residual_critical_high: 0
+  needs_rework: false
 
 requirements:
   FR1:

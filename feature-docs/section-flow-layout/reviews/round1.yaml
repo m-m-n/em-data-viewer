@@ -1,0 +1,26 @@
+round: 1
+executed_at: "2026-07-18T20:26:02+09:00"
+scope:
+  review_mode: diff
+  base_commit: 14a1f95a9de06827028c5539b77dc81fafd88618
+  head_commit: 87e68ff824c4d98bc8d8f727e2124015b298e331
+  changed_files:
+    - design-system/tokens.html
+    - design-system/tokens.yaml
+    - internal/ui/sections.go
+    - internal/ui/style.go
+    - internal/ui/style_test.go
+plan:
+  floor: [comprehensive, spec]
+  discretionary: []
+  codex_cross_validation: false
+perspective_runs:
+  - {perspective: comprehensive, source: claude, status: completed}
+  - {perspective: spec, source: claude, status: completed}
+findings: []
+auto_fix:
+  loops_run: 0
+  applied_total: 0
+  termination: clean
+residual_critical_high: 0
+rework_required: false
