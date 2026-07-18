@@ -1,0 +1,104 @@
+schema_version: 1
+feature: section-flow-layout
+created: 2026-07-18
+base_branch: main
+parent_branch: em-workflow/section-flow-layout/integration
+
+project:
+  license: none
+  components:
+    main:
+      language: go
+      build_command: "go build ./..."
+      test_command: "go test ./..."
+      format_command: "gofmt -l -w ."
+      e2e_test_command: ""
+
+workflow:
+  - id: create-spec
+    artifacts: [REQUIREMENTS.md, SPEC.md]
+    status: completed
+    completed_at_commit: 14a1f95a9de06827028c5539b77dc81fafd88618
+  - id: design
+    artifacts: [DESIGN.md, design/]
+    status: skipped
+    skipped_reason: "レイアウト変更のみで、間隔・詰め方などの視覚的決定は SPEC で確定済み。新規の見た目要素はない"
+  - id: create-plan
+    artifacts: [IMPLEMENTATION.md, VERIFICATION.md, tasks/]
+    status: completed
+    completed_at_commit: 14a1f95a9de06827028c5539b77dc81fafd88618
+  - id: implement
+    status: pending
+  - id: review
+    status: pending
+  - id: verify
+    status: pending
+    result: null
+    failed_items: []
+  - id: retrospect
+    status: pending
+
+tasks:
+  task0001:
+    title: "Reflowing section layout (FlowBox)"
+    plan: tasks/task0001.md
+    files:
+      - internal/ui/sections.go
+      - internal/ui/style.go
+      - internal/ui/style_test.go
+      - design-system/tokens.yaml
+      - design-system/tokens.html
+    skills: [design-impl]
+    domains: [ui]
+    complexity: medium
+    requirements: [FR1, FR2, FR3, FR4, FR5, NFR1, NFR2]
+    status: pending
+    notes: null
+
+review:
+  status: pending
+  rounds_completed: 0
+
+requirements:
+  FR1:
+    title: "Sections container is a horizontally reflowing GtkFlowBox"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [M-1]
+  FR2:
+    title: "Cells use natural width (non-homogeneous, no per-row cap)"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [M-1, E-1]
+  FR3:
+    title: "Column spacing 12px, row spacing 0, tokens updated"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [M-1, M-4]
+  FR4:
+    title: "No container-added visuals (selection none, flowboxchild reset)"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-1, M-3]
+  FR5:
+    title: "Existing reload/update/styling/error behaviors preserved"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-2, TS-3, M-2, M-3]
+  NFR1:
+    title: "No new external dependencies"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [M-5]
+  NFR2:
+    title: "Build, tests, gofmt clean"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-3]
