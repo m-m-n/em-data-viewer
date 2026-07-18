@@ -1,0 +1,12 @@
+feature: section-dividers
+collected_at: "2026-07-18T23:47:30+09:00"
+session_ids: [176740d5-1e7d-41d7-8981-f3732e58ea0b]
+signals:
+  review_critical_high: []
+  conflict_reworks: []
+  file_prediction_misses: []
+  verification_failures: []
+  discretionary_perspectives: []
+  declined_findings: []
+lessons_candidates:
+  - "design-system/tokens.yaml の未コミット変更（divider トークン追加）は implement 開始時に integration ブランチへ運ばれなかった（Step I.1 は untracked のみコピーし、tracked の user 変更はコミットしない仕様）。task plan にトークン値を明記していたため implementer は正しい値で実装できたが、tracked なデザイントークンの未コミット変更に依存する feature では planner が値を plan に埋め込むことが必須になる。"

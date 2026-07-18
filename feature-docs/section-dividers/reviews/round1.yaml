@@ -1,0 +1,25 @@
+round: 1
+executed_at: "2026-07-18T23:45:22+09:00"
+scope:
+  review_mode: diff
+  base_commit: bcd4df3a3c749f712fd71b8cf168dc6bfb2ec3f0
+  head_commit: 150b3491cb1c68a76575310422d0ce9a5d7d7cde
+  changed_files:
+    - internal/ui/sections.go
+    - internal/ui/sections_test.go
+    - internal/ui/style.go
+    - internal/ui/style_test.go
+plan:
+  floor: [comprehensive, spec]
+  discretionary: []
+  codex_cross_validation: false
+perspective_runs:
+  - {perspective: comprehensive, source: claude, status: completed}
+  - {perspective: spec, source: claude, status: completed}
+findings: []
+auto_fix:
+  loops_run: 0
+  applied_total: 0
+  termination: clean
+residual_critical_high: 0
+rework_required: false

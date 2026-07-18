@@ -28,15 +28,21 @@ workflow:
     status: completed
     completed_at_commit: bcd4df3a3c749f712fd71b8cf168dc6bfb2ec3f0
   - id: implement
-    status: pending
+    status: completed
+    completed_at_commit: 150b3491cb1c68a76575310422d0ce9a5d7d7cde
+    base_commit: bcd4df3a3c749f712fd71b8cf168dc6bfb2ec3f0
   - id: review
-    status: pending
+    status: completed
+    completed_at_commit: 150b3491cb1c68a76575310422d0ce9a5d7d7cde
   - id: verify
-    status: pending
-    result: null
+    status: completed
+    completed_at_commit: 150b3491cb1c68a76575310422d0ce9a5d7d7cde
+    result: pass
     failed_items: []
+    notes: "Automated: build OK (benign gotk4 cgo warnings only), go test ./... all packages pass (TS-1..TS-5 covered), gofmt clean. No excluded requirements. Manual scenarios M-1..M-3 (divider visual check vs mockup, reload/error-banner spacing) remain for human verification — not automatable per test/README.md."
   - id: retrospect
-    status: pending
+    status: completed
+    completed_at_commit: 150b3491cb1c68a76575310422d0ce9a5d7d7cde
 
 tasks:
   task0001:
@@ -52,13 +58,22 @@ tasks:
     domains: [ui]
     complexity: medium
     requirements: [FR1, FR2, FR3, FR4, FR5, FR6, NFR1, NFR2]
-    status: pending
+    status: merged
     notes: null
     branch: em-workflow/section-dividers/task0001
 
 review:
-  status: pending
-  rounds_completed: 0
+  status: completed
+  rounds_completed: 1
+  plan:
+    floor: [comprehensive, spec]
+    discretionary: []
+    codex_cross_validation: false
+  perspectives:
+    comprehensive: completed
+    spec: completed
+  residual_critical_high: 0
+  needs_rework: false
 
 requirements:
   FR1:
