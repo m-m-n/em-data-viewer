@@ -179,6 +179,51 @@ func TestBuildStylesheet_IncludesWindowAndEverySection(t *testing.T) {
 	}
 }
 
+// --- Section flow layout (task0001) ---
+
+// TestBuildStylesheet_ResetsFlowBoxChildWrapper references AC-1: the
+// generated stylesheet contains a rule for the flow container's
+// auto-inserted child wrapper node ("flowboxchild") with zero padding and
+// zero margin, so the theme's default wrapper spacing never adds gaps
+// beyond the configured column/row spacing.
+func TestBuildStylesheet_ResetsFlowBoxChildWrapper(t *testing.T) {
+	windowStyle := MergeStyle(WindowStyleDefaults, nil)
+
+	css := buildStylesheet(windowStyle, nil)
+
+	if !strings.Contains(css, "flowboxchild {") {
+		t.Fatalf("buildStylesheet() missing flowboxchild wrapper rule: %q", css)
+	}
+	if !strings.Contains(css, "padding: 0;") {
+		t.Errorf("buildStylesheet() flowboxchild rule missing zero padding: %q", css)
+	}
+	if !strings.Contains(css, "margin: 0;") {
+		t.Errorf("buildStylesheet() flowboxchild rule missing zero margin: %q", css)
+	}
+}
+
+// TestSectionGapConstants_MatchDesignTokens references AC-2/AC-6: the
+// column/row gap constants used to construct the flow container match the
+// spacing documented in design-system/tokens.yaml (横 2 unit / 縦 0).
+func TestSectionGapConstants_MatchDesignTokens(t *testing.T) {
+	if sectionColumnGap != 2*spacingUnit {
+		t.Errorf("sectionColumnGap = %d, want %d (2 spacing units)", sectionColumnGap, 2*spacingUnit)
+	}
+	if sectionRowGap != 0 {
+		t.Errorf("sectionRowGap = %d, want 0", sectionRowGap)
+	}
+}
+
+// TestMaxSectionsPerLine_DoesNotConstrainRealisticSectionCounts references
+// AC-2: the per-line maximum passed to the flow container must not itself
+// force a wrap for realistic section counts — only available width should.
+func TestMaxSectionsPerLine_DoesNotConstrainRealisticSectionCounts(t *testing.T) {
+	const realisticMaxSections = 20
+	if maxSectionsPerLine <= realisticMaxSections {
+		t.Errorf("maxSectionsPerLine = %d, want > %d (a realistic section count)", maxSectionsPerLine, realisticMaxSections)
+	}
+}
+
 // --- SPEC key -> internal key translation (rework round 1, task0006) ---
 
 // TestMergeStyle_SectionSpecKeysChangeOutputFontAndColor references AC-1:

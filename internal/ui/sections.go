@@ -26,24 +26,40 @@ type sectionWidgets struct {
 	output *gtk.Label
 }
 
-// sectionsView manages the vertical stack of sections inside the window
-// (no gaps, no divider lines).
+// maxSectionsPerLine bounds GtkFlowBox's per-line child request high enough
+// that no realistic section count ever forces a row to wrap on count alone
+// — only available width wraps a row (FR2).
+const maxSectionsPerLine = 100
+
+// sectionsView manages the horizontally reflowing row of sections inside
+// the window: sections share a row left-to-right in config order while
+// width allows, wrapping to the next row when it does not (no divider
+// lines).
 type sectionsView struct {
-	widget *gtk.Box
+	widget *gtk.FlowBox
 	order  []string
 	byKey  map[string]*sectionWidgets
 	nextID int
 }
 
 func newSectionsView() *sectionsView {
+	flow := gtk.NewFlowBox()
+	flow.SetOrientation(gtk.OrientationHorizontal)
+	flow.SetSelectionMode(gtk.SelectionNone)
+	flow.SetHomogeneous(false)
+	flow.SetColumnSpacing(sectionColumnGap)
+	flow.SetRowSpacing(sectionRowGap)
+	flow.SetMinChildrenPerLine(1)
+	flow.SetMaxChildrenPerLine(maxSectionsPerLine)
+
 	return &sectionsView{
-		widget: gtk.NewBox(gtk.OrientationVertical, sectionGap),
+		widget: flow,
 		byKey:  make(map[string]*sectionWidgets),
 	}
 }
 
-// setSections replaces the displayed sections with sections, stacked
-// vertically in the given order.
+// setSections replaces the displayed sections with sections, appended to
+// the flow container left-to-right in the given order (AC-3).
 func (sv *sectionsView) setSections(sections []SectionViewModel) {
 	for _, key := range sv.order {
 		sv.widget.Remove(sv.byKey[key].root)
