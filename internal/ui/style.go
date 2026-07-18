@@ -178,19 +178,6 @@ func windowCSS(style map[string]string) string {
 	return b.String()
 }
 
-// sectionsContainerCSS resets the flow container's auto-inserted per-child
-// wrapper node (GtkFlowBoxChild's CSS node, "flowboxchild") to zero padding
-// and zero margin, so the theme's default wrapper spacing never adds gaps
-// beyond the configured column/row spacing (AC-1, FR4).
-func sectionsContainerCSS() string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "flowboxchild {\n")
-	fmt.Fprintf(&b, "  padding: 0;\n")
-	fmt.Fprintf(&b, "  margin: 0;\n")
-	fmt.Fprintf(&b, "}\n")
-	return b.String()
-}
-
 // sectionCSS translates a merged per-section style map into the GTK CSS
 // block for that section's label and output widgets. class is the unique
 // per-section CSS class the caller has already assigned to that section's
@@ -215,7 +202,6 @@ func sectionCSS(class string, style map[string]string) string {
 func buildStylesheet(windowStyle map[string]string, sections []sectionStyleEntry) string {
 	var b strings.Builder
 	b.WriteString(windowCSS(windowStyle))
-	b.WriteString(sectionsContainerCSS())
 	for _, s := range sections {
 		b.WriteString(sectionCSS(s.class, s.style))
 	}

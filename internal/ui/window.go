@@ -4,6 +4,7 @@ import (
 	"log"
 
 	"github.com/diamondburned/gotk4/pkg/gdk/v4"
+	"github.com/diamondburned/gotk4/pkg/glib/v2"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 )
 
@@ -48,6 +49,7 @@ func newFrame(app *gtk.Application, quit func(), onKeepAboveToggle func(enabled 
 
 	sv := newSectionsView()
 	root.Append(sv.widget)
+	attachReflowTriggers(win, sv)
 
 	display := gdk.DisplayGetDefault()
 
@@ -81,6 +83,20 @@ func newFrame(app *gtk.Application, quit func(), onKeepAboveToggle func(enabled 
 	})
 
 	return f
+}
+
+// attachReflowTriggers wires the window's default-width property notify and
+// map signal to a deferred reflow of the sections view (Design: Triggers;
+// FR4). Each defers by one main-loop iteration via glib.IdleAdd so the
+// sections container's allocation has settled to the new size by the time
+// reflow measures it.
+func attachReflowTriggers(win *gtk.ApplicationWindow, sv *sectionsView) {
+	win.NotifyProperty("default-width", func() {
+		glib.IdleAdd(sv.reflow)
+	})
+	win.ConnectMap(func() {
+		glib.IdleAdd(sv.reflow)
+	})
 }
 
 // setKeepAbove records the desired keep-above value and applies it: on X11
