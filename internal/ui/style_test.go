@@ -194,15 +194,94 @@ func TestBuildStylesheet_NoLongerContainsFlowBoxChildRule(t *testing.T) {
 	}
 }
 
-// TestSectionGapConstants_MatchDesignTokens references AC-2/AC-6: the
-// column/row gap constants used to construct the row-packing layout match
-// the spacing documented in design-system/tokens.yaml (横 2 unit / 縦 0).
+// TestSectionGapConstants_MatchDesignTokens references task0001 AC-3: the
+// packing gap is 1 unit + divider width + 1 unit (13px, the on-screen
+// footprint of a vdivider plus its margins), and the row gap stays zero —
+// row boxes carry zero intrinsic spacing, the vertical distance between
+// rows comes entirely from the hdivider widget's own height.
 func TestSectionGapConstants_MatchDesignTokens(t *testing.T) {
-	if sectionColumnGap != 2*spacingUnit {
-		t.Errorf("sectionColumnGap = %d, want %d (2 spacing units)", sectionColumnGap, 2*spacingUnit)
+	want := spacingUnit + dividerWidth + spacingUnit
+	if sectionColumnGap != want {
+		t.Errorf("sectionColumnGap = %d, want %d (unit + divider width + unit)", sectionColumnGap, want)
+	}
+	if sectionColumnGap != 13 {
+		t.Errorf("sectionColumnGap = %d, want 13", sectionColumnGap)
 	}
 	if sectionRowGap != 0 {
 		t.Errorf("sectionRowGap = %d, want 0", sectionRowGap)
+	}
+}
+
+// --- Divider rules + banner spacing (task0001) ---
+
+// TestDividerConstants_MatchDesignIntent references AC-1/AC-2: the divider
+// color and thickness are fixed constants matching the design's
+// color.divider / border.divider-width values, and the banner-to-sections
+// gap is exactly 1 spacing unit (AC-4).
+func TestDividerConstants_MatchDesignIntent(t *testing.T) {
+	if dividerColor != "#666666" {
+		t.Errorf("dividerColor = %q, want %q", dividerColor, "#666666")
+	}
+	if dividerWidth != 1 {
+		t.Errorf("dividerWidth = %d, want 1", dividerWidth)
+	}
+	if bannerSectionGap != spacingUnit {
+		t.Errorf("bannerSectionGap = %d, want %d (1 spacing unit)", bannerSectionGap, spacingUnit)
+	}
+}
+
+// TestWindowCSS_IncludesHorizontalDividerRule references AC-1: the window
+// stylesheet contains a dv-hdivider rule with the divider color, 1px
+// height, 6px horizontal margins and zero vertical margins.
+func TestWindowCSS_IncludesHorizontalDividerRule(t *testing.T) {
+	style := MergeStyle(WindowStyleDefaults, nil)
+	css := windowCSS(style)
+
+	if !strings.Contains(css, ".dv-hdivider {") {
+		t.Fatalf("windowCSS() missing .dv-hdivider rule: %q", css)
+	}
+	for _, want := range []string{
+		fmt.Sprintf("background-color: %s;", dividerColor),
+		fmt.Sprintf("min-height: %dpx;", dividerWidth),
+		fmt.Sprintf("margin: 0 %dpx;", spacingUnit),
+	} {
+		if !strings.Contains(css, want) {
+			t.Errorf("windowCSS() = %q, want it to contain %q", css, want)
+		}
+	}
+}
+
+// TestWindowCSS_IncludesVerticalDividerRule references AC-2: the window
+// stylesheet contains a dv-vdivider rule with the divider color, 1px width
+// and 6px margins.
+func TestWindowCSS_IncludesVerticalDividerRule(t *testing.T) {
+	style := MergeStyle(WindowStyleDefaults, nil)
+	css := windowCSS(style)
+
+	if !strings.Contains(css, ".dv-vdivider {") {
+		t.Fatalf("windowCSS() missing .dv-vdivider rule: %q", css)
+	}
+	for _, want := range []string{
+		fmt.Sprintf("background-color: %s;", dividerColor),
+		fmt.Sprintf("min-width: %dpx;", dividerWidth),
+		fmt.Sprintf("margin: %dpx;", spacingUnit),
+	} {
+		if !strings.Contains(css, want) {
+			t.Errorf("windowCSS() = %q, want it to contain %q", css, want)
+		}
+	}
+}
+
+// TestWindowCSS_BannerHasBottomSpacingTowardSections references AC-4: the
+// banner styling includes 1 unit (6px) of bottom spacing toward the
+// sections.
+func TestWindowCSS_BannerHasBottomSpacingTowardSections(t *testing.T) {
+	style := MergeStyle(WindowStyleDefaults, nil)
+	css := windowCSS(style)
+
+	want := fmt.Sprintf("margin-bottom: %dpx;", bannerSectionGap)
+	if !strings.Contains(css, want) {
+		t.Errorf("windowCSS() = %q, want it to contain %q", css, want)
 	}
 }
 

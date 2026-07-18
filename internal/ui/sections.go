@@ -36,6 +36,12 @@ type sectionsView struct {
 	widget *gtk.Box
 	rows   []*gtk.Box
 
+	// rowChildren holds every widget currently appended directly to widget
+	// for the current row layout, in append order: row boxes interleaved
+	// with the hdividers between them. Tracked separately from rows so a
+	// rebuild removes exactly what it added, including the dividers.
+	rowChildren []gtk.Widgetter
+
 	order  []string
 	byKey  map[string]*sectionWidgets
 	nextID int
@@ -58,10 +64,11 @@ func newSectionsView() *sectionsView {
 // setSections replaces the displayed sections with sections, in the given
 // order (AC-4), and reflows them into rows (FR4).
 func (sv *sectionsView) setSections(sections []SectionViewModel) {
-	for _, row := range sv.rows {
-		sv.widget.Remove(row)
+	for _, child := range sv.rowChildren {
+		sv.widget.Remove(child)
 	}
 	sv.rows = nil
+	sv.rowChildren = nil
 	sv.lastAssignment = nil
 
 	sv.order = sv.order[:0]
@@ -159,11 +166,17 @@ func (sv *sectionsView) reflow() {
 }
 
 // rebuildRows re-parents every section root into fresh row boxes per
-// assignment: it detaches each root from wherever it is currently parented
-// (a freshly built section, not yet parented anywhere, is left alone),
-// drops the old row boxes from the container, then builds and appends new
-// row boxes with the roots in assignment order. Postcondition: every root
-// is parented to exactly one row box; row count equals len(assignment).
+// assignment, interleaved with fresh divider widgets: it detaches each root
+// from wherever it is currently parented (a freshly built section, not yet
+// parented anywhere, is left alone), drops the old row boxes and dividers
+// from the container, then builds and appends new row boxes with the roots
+// in assignment order — an hdivider between adjacent rows, a vdivider
+// between adjacent section roots within a row (AC-5). Row boxes carry zero
+// intrinsic spacing (AC-3); the on-screen distance comes entirely from the
+// divider widgets and their CSS margins. Postcondition: every root is
+// parented to exactly one row box; row count equals len(assignment); N rows
+// produce N-1 hdividers; a row of M sections produces M-1 vdividers; zero
+// sections produce zero rows and zero dividers.
 func (sv *sectionsView) rebuildRows(assignment [][]int) {
 	for _, key := range sv.order {
 		root := sv.byKey[key].root
@@ -171,20 +184,70 @@ func (sv *sectionsView) rebuildRows(assignment [][]int) {
 			root.Unparent()
 		}
 	}
-	for _, row := range sv.rows {
-		sv.widget.Remove(row)
+	for _, child := range sv.rowChildren {
+		sv.widget.Remove(child)
 	}
 
+	hCount, vCounts := rowDividerCounts(assignment)
+
 	rows := make([]*gtk.Box, len(assignment))
+	children := make([]gtk.Widgetter, 0, len(assignment)+hCount)
 	for i, group := range assignment {
-		row := gtk.NewBox(gtk.OrientationHorizontal, sectionColumnGap)
-		for _, idx := range group {
-			row.Append(sv.byKey[sv.order[idx]].root)
+		if i > 0 {
+			hd := newHDivider()
+			sv.widget.Append(hd)
+			children = append(children, hd)
+		}
+
+		row := gtk.NewBox(gtk.OrientationHorizontal, 0)
+		row.Append(sv.byKey[sv.order[group[0]]].root)
+		for k := 0; k < vCounts[i]; k++ {
+			row.Append(newVDivider())
+			row.Append(sv.byKey[sv.order[group[k+1]]].root)
 		}
 		sv.widget.Append(row)
+		children = append(children, row)
 		rows[i] = row
 	}
 	sv.rows = rows
+	sv.rowChildren = children
+}
+
+// rowDividerCounts derives, from a row assignment, how many divider widgets
+// rebuildRows must interleave: N rows yield N-1 horizontal dividers between
+// them; a row holding M sections yields M-1 vertical dividers within it;
+// zero rows yield zero horizontal dividers (AC-5). Pure and deterministic;
+// no widget types involved, so it is testable directly even though the GTK
+// widget construction it drives is not (test/README.md).
+func rowDividerCounts(assignment [][]int) (horizontal int, vertical []int) {
+	if len(assignment) > 1 {
+		horizontal = len(assignment) - 1
+	}
+	vertical = make([]int, len(assignment))
+	for i, group := range assignment {
+		if len(group) > 1 {
+			vertical[i] = len(group) - 1
+		}
+	}
+	return horizontal, vertical
+}
+
+// newHDivider returns a stateless horizontal rule widget separating two
+// adjacent rows (dv-hdivider); its thickness, color and margins come
+// entirely from the window stylesheet (AC-1).
+func newHDivider() *gtk.Box {
+	d := gtk.NewBox(gtk.OrientationHorizontal, 0)
+	d.AddCSSClass("dv-hdivider")
+	return d
+}
+
+// newVDivider returns a stateless vertical rule widget separating two
+// adjacent sections sharing a row (dv-vdivider); its thickness, color and
+// margins come entirely from the window stylesheet (AC-2).
+func newVDivider() *gtk.Box {
+	d := gtk.NewBox(gtk.OrientationVertical, 0)
+	d.AddCSSClass("dv-vdivider")
+	return d
 }
 
 // packRows greedily assigns widths (natural section widths, in config

@@ -12,12 +12,31 @@ import (
 // Spacing unit (design-system/tokens.yaml spacing.unit) and its fixed
 // multiples. These are layout constants, not user-overridable style values.
 const (
-	spacingUnit      = 6 // px
-	windowPadding    = 2 * spacingUnit
-	sectionColumnGap = 2 * spacingUnit // horizontal gap between sections sharing a row
-	sectionRowGap    = 0               // vertical gap between wrapped rows
-	labelOutputGap   = 1 * spacingUnit
+	spacingUnit   = 6 // px
+	windowPadding = 2 * spacingUnit
+	// dividerWidth is the divider rule thickness (border.divider-width
+	// design token, fixed — not user-overridable, FR3).
+	dividerWidth = 1 // px
+	// sectionColumnGap is the on-screen horizontal distance between section
+	// roots sharing a row: 1 unit + divider width + 1 unit (AC-3). It feeds
+	// packRows' gap parameter; the row box itself carries zero intrinsic
+	// spacing (AC-3) — the distance is produced entirely by the vdivider
+	// widget and its margins.
+	sectionColumnGap = spacingUnit + dividerWidth + spacingUnit
+	// sectionRowGap is the GTK Box spacing between wrapped rows. It stays
+	// zero (AC-3): the vertical distance between rows is produced entirely
+	// by the hdivider widget's own height, not extra Box spacing.
+	sectionRowGap  = 0
+	labelOutputGap = 1 * spacingUnit
+	// bannerSectionGap is the space between the banner's bottom edge and
+	// the sections below it (AC-4).
+	bannerSectionGap = 1 * spacingUnit
 )
+
+// dividerColor is the fixed color shared by both divider rules
+// (color.divider design token, #666666) — one step darker than the window
+// frame, quieter than output text. Not user-overridable (FR3).
+const dividerColor = "#666666"
 
 // WindowStyleDefaults are the design-token defaults for window-level
 // styling (design-system/tokens.yaml). Keys are overridden individually by
@@ -171,9 +190,20 @@ func windowCSS(style map[string]string) string {
 	fmt.Fprintf(&b, "  background-color: %s;\n", style["error-background"])
 	fmt.Fprintf(&b, "  color: %s;\n", style["error-color"])
 	fmt.Fprintf(&b, "  font-family: monospace;\n")
+	fmt.Fprintf(&b, "  margin-bottom: %dpx;\n", bannerSectionGap)
 	fmt.Fprintf(&b, "}\n")
 	fmt.Fprintf(&b, ".dv-output.dv-error {\n")
 	fmt.Fprintf(&b, "  color: %s;\n", style["error-color"])
+	fmt.Fprintf(&b, "}\n")
+	fmt.Fprintf(&b, ".dv-hdivider {\n")
+	fmt.Fprintf(&b, "  background-color: %s;\n", dividerColor)
+	fmt.Fprintf(&b, "  min-height: %dpx;\n", dividerWidth)
+	fmt.Fprintf(&b, "  margin: 0 %dpx;\n", spacingUnit)
+	fmt.Fprintf(&b, "}\n")
+	fmt.Fprintf(&b, ".dv-vdivider {\n")
+	fmt.Fprintf(&b, "  background-color: %s;\n", dividerColor)
+	fmt.Fprintf(&b, "  min-width: %dpx;\n", dividerWidth)
+	fmt.Fprintf(&b, "  margin: %dpx;\n", spacingUnit)
 	fmt.Fprintf(&b, "}\n")
 	return b.String()
 }

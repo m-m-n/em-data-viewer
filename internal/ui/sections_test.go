@@ -180,3 +180,62 @@ func TestAssignmentsEqual(t *testing.T) {
 		})
 	}
 }
+
+// --- rowDividerCounts (task0001) ---
+
+// TestRowDividerCounts references AC-5: after a rebuild with N rows,
+// exactly N-1 horizontal dividers exist between the row boxes; a row
+// holding M sections holds exactly M-1 vertical dividers; zero sections
+// produce zero dividers (E-2); a single row produces zero horizontal
+// dividers (E-1); a single-section row produces zero vertical dividers.
+func TestRowDividerCounts(t *testing.T) {
+	cases := []struct {
+		name           string
+		assignment     [][]int
+		wantHorizontal int
+		wantVertical   []int
+	}{
+		{
+			name:           "zero sections: no rows, no dividers",
+			assignment:     nil,
+			wantHorizontal: 0,
+			wantVertical:   []int{},
+		},
+		{
+			name:           "single row, single section: no dividers at all",
+			assignment:     [][]int{{0}},
+			wantHorizontal: 0,
+			wantVertical:   []int{0},
+		},
+		{
+			name:           "single row, multiple sections: vertical dividers only",
+			assignment:     [][]int{{0, 1, 2}},
+			wantHorizontal: 0,
+			wantVertical:   []int{2},
+		},
+		{
+			name:           "multiple rows, single section each: horizontal dividers only",
+			assignment:     [][]int{{0}, {1}, {2}},
+			wantHorizontal: 2,
+			wantVertical:   []int{0, 0, 0},
+		},
+		{
+			name:           "multiple rows, mixed section counts",
+			assignment:     [][]int{{0, 1}, {2}, {3, 4, 5}},
+			wantHorizontal: 2,
+			wantVertical:   []int{1, 0, 2},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotH, gotV := rowDividerCounts(tc.assignment)
+			if gotH != tc.wantHorizontal {
+				t.Errorf("rowDividerCounts(%v) horizontal = %d, want %d", tc.assignment, gotH, tc.wantHorizontal)
+			}
+			if !reflect.DeepEqual(gotV, tc.wantVertical) {
+				t.Errorf("rowDividerCounts(%v) vertical = %v, want %v", tc.assignment, gotV, tc.wantVertical)
+			}
+		})
+	}
+}
