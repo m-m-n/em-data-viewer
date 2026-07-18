@@ -15,8 +15,9 @@ build:
 
 dpkg: build
 	rm -rf $(PKG_ROOT)
-	mkdir -p $(PKG_ROOT)/DEBIAN $(PKG_ROOT)/usr/bin
+	mkdir -p $(PKG_ROOT)/DEBIAN $(PKG_ROOT)/usr/bin $(PKG_ROOT)/usr/share/doc/$(APP_NAME)
 	cp $(BUILD_DIR)/$(APP_NAME) $(PKG_ROOT)/usr/bin/
+	cp config.yaml.example $(PKG_ROOT)/usr/share/doc/$(APP_NAME)/
 	printf 'Package: %s\n' '$(APP_NAME)' > $(PKG_ROOT)/DEBIAN/control
 	printf 'Version: %s\n' '$(VERSION)' >> $(PKG_ROOT)/DEBIAN/control
 	printf 'Architecture: %s\n' '$(ARCH)' >> $(PKG_ROOT)/DEBIAN/control

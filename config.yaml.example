@@ -1,0 +1,33 @@
+# data-viewer default configuration
+# Install to: ~/.config/data-viewer/config.yaml
+
+window:
+  width: 400
+  height: 600
+  keep_above: true
+  style:
+    background: "#1e1e1eee"
+    border_color: "#888888"
+    border_width: 1
+
+sections:
+  - name: clock
+    command: "date '+%Y-%m-%d %H:%M:%S'"
+    mode: interval
+    interval: 1s
+
+  - name: memory
+    command: "free -h"
+    mode: interval
+    interval: 5s
+
+  - name: disk
+    command: "df -h /"
+    mode: interval
+    interval: 30s
+
+  # Stream mode example:
+  # - name: log
+  #   command: "journalctl -f -n 20 --no-pager -o cat"
+  #   mode: stream
+  #   max_lines: 50
