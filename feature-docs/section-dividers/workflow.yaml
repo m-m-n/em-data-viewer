@@ -1,0 +1,111 @@
+schema_version: 1
+feature: section-dividers
+created: 2026-07-18
+base_branch: main
+parent_branch: em-workflow/section-dividers/integration
+
+project:
+  license: MIT
+  components:
+    main:
+      language: go
+      build_command: "go build ./..."
+      test_command: "go test ./..."
+      format_command: "gofmt -l -w ."
+      e2e_test_command: ""
+
+workflow:
+  - id: create-spec
+    artifacts: [REQUIREMENTS.md, SPEC.md]
+    status: completed
+    completed_at_commit: bcd4df3a3c749f712fd71b8cf168dc6bfb2ec3f0
+  - id: design
+    artifacts: [DESIGN.md, design/]
+    status: skipped
+    skipped_reason: "デザインは確定済み（design-system/tokens.yaml と process-output-widget の DESIGN.md / mockup が更新済みで SSOT）"
+  - id: create-plan
+    artifacts: [IMPLEMENTATION.md, VERIFICATION.md, tasks/]
+    status: completed
+    completed_at_commit: bcd4df3a3c749f712fd71b8cf168dc6bfb2ec3f0
+  - id: implement
+    status: pending
+  - id: review
+    status: pending
+  - id: verify
+    status: pending
+    result: null
+    failed_items: []
+  - id: retrospect
+    status: pending
+
+tasks:
+  task0001:
+    title: "Section divider rules (h/v) + banner gap"
+    plan: tasks/task0001.md
+    files:
+      - internal/ui/style.go
+      - internal/ui/style_test.go
+      - internal/ui/sections.go
+      - internal/ui/sections_test.go
+      - internal/ui/banner.go
+    skills: [design-impl]
+    domains: [ui]
+    complexity: medium
+    requirements: [FR1, FR2, FR3, FR4, FR5, FR6, NFR1, NFR2]
+    status: pending
+    notes: null
+    branch: em-workflow/section-dividers/task0001
+
+review:
+  status: pending
+  rounds_completed: 0
+
+requirements:
+  FR1:
+    title: "Horizontal divider rule between rows (1px, zero gap, 1-unit end inset)"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-1, M-1]
+  FR2:
+    title: "Vertical divider rule between in-row sections (1px, 1-unit sides, 1-unit end inset)"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-2, M-1]
+  FR3:
+    title: "Divider color/width fixed constants, no config override"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-1, TS-2]
+  FR4:
+    title: "packRows gap equals divider footprint (13px), row-box spacing 0"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-3]
+  FR5:
+    title: "Config-error banner 1-unit bottom spacing"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-4, M-3]
+  FR6:
+    title: "Existing section behaviors preserved"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-5, M-2]
+  NFR1:
+    title: "No new external dependencies"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-5]
+  NFR2:
+    title: "Quality gates: build, test, gofmt clean"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-5]
