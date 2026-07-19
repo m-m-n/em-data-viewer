@@ -1,0 +1,119 @@
+schema_version: 1
+feature: app-icon
+created: 2026-07-19
+base_branch: main
+parent_branch: em-workflow/app-icon/integration
+
+project:
+  license: MIT
+  components:
+    main:
+      language: go
+      build_command: "go build ./..."
+      test_command: "go test ./..."
+      format_command: "gofmt -l -w ."
+      e2e_test_command: "make dpkg"
+
+workflow:
+  - id: create-spec
+    artifacts: [REQUIREMENTS.md, SPEC.md]
+    status: completed
+    completed_at_commit: fb810033a4842d4c0bffeb01dd394f3897c93f31
+  - id: design
+    artifacts: [DESIGN.md, design/]
+    status: completed
+    completed_at_commit: fb810033a4842d4c0bffeb01dd394f3897c93f31
+    skipped_reason: null
+  - id: create-plan
+    artifacts: [IMPLEMENTATION.md, VERIFICATION.md, tasks/]
+    status: completed
+    completed_at_commit: fb810033a4842d4c0bffeb01dd394f3897c93f31
+  - id: implement
+    status: pending
+  - id: review
+    status: pending
+  - id: verify
+    status: pending
+    result: null
+    failed_items: []
+  - id: retrospect
+    status: pending
+
+tasks:
+  task0001:
+    title: "Icon asset, build-time rendering and deb packaging"
+    plan: tasks/task0001.md
+    files:
+      - assets/icon.svg
+      - Makefile
+    skills: [infra-impl]
+    domains: [config-infra]
+    complexity: medium
+    requirements: [FR1, FR2, FR3, FR4, FR6, NFR1]
+    status: pending
+    notes: null
+  task0002:
+    title: "Runtime window icon name"
+    plan: tasks/task0002.md
+    files:
+      - internal/ui/window.go
+    skills: []
+    domains: [ui]
+    complexity: low
+    requirements: [FR5, NFR2]
+    status: pending
+    notes: null
+
+review:
+  status: pending
+  rounds_completed: 0
+
+requirements:
+  FR1:
+    title: "Git-tracked SVG icon source at assets/icon.svg"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-3, TS-6]
+  FR2:
+    title: "Makefile icons target renders PNGs via rsvg-convert, fails when missing"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-3, TS-5, TS-7]
+  FR3:
+    title: "dpkg installs hicolor PNGs and scalable SVG"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-3]
+  FR4:
+    title: "dpkg installs em-data-viewer.desktop"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-3]
+  FR5:
+    title: "Runtime window icon-name set to em-data-viewer"
+    status: ok
+    tbd_reason: null
+    tasks: [task0002]
+    tests: [TS-1, M-1]
+  FR6:
+    title: "postinst/postrm update icon cache and desktop database"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-4]
+  NFR1:
+    title: "No binaries in git; PNGs generated under build/"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-6]
+  NFR2:
+    title: "Testability: no GTK imports in logic packages"
+    status: ok
+    tbd_reason: null
+    tasks: [task0002]
+    tests: [TS-2]
