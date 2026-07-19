@@ -1,5 +1,5 @@
-# data-viewer default configuration
-# Install to: ~/.config/data-viewer/config.yaml
+# em-data-viewer default configuration
+# Install to: ~/.config/em-data-viewer/config.yaml
 
 window:
   width: 400

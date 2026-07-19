@@ -1,4 +1,4 @@
-// Package config implements the data-viewer YAML configuration:
+// Package config implements the em-data-viewer YAML configuration:
 // schema types, loading with defaults and validation, a last-good
 // config holder, and a debounced file watcher. This package must not
 // import gotk4 or anything GTK-related (NFR3) so it stays testable

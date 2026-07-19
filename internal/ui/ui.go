@@ -15,7 +15,7 @@ const applicationID = "org.dataviewer.Widget"
 var osArgs = os.Args
 
 // runArgs returns the argument slice passed to the GTK application's Run
-// call: only the program name (index 0). cmd/data-viewer's own CLI parsing
+// call: only the program name (index 0). cmd/em-data-viewer's own CLI parsing
 // is the single owner of the application-specific config-path argument
 // (FR2); that argument must never reach GApplication, where it would be
 // treated as a file to open and suppress the "activate" signal (AC-1).

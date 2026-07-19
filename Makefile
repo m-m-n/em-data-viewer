@@ -1,4 +1,4 @@
-APP_NAME  := data-viewer
+APP_NAME  := em-data-viewer
 VERSION   ?= 0.1.0
 ARCH      := $(shell dpkg --print-architecture)
 BUILD_DIR := build

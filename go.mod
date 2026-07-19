@@ -1,4 +1,4 @@
-module data-viewer
+module em-data-viewer
 
 go 1.26
 

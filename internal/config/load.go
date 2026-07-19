@@ -11,8 +11,8 @@ import (
 
 // ResolvePath decides the config file path: an explicit override
 // (e.g. a CLI argument) wins if non-empty; otherwise
-// $XDG_CONFIG_HOME/data-viewer/config.yaml if xdgConfigHome is
-// non-empty; otherwise ~/.config/data-viewer/config.yaml using home.
+// $XDG_CONFIG_HOME/em-data-viewer/config.yaml if xdgConfigHome is
+// non-empty; otherwise ~/.config/em-data-viewer/config.yaml using home.
 // It is a pure function so path resolution is testable without
 // touching the real environment or filesystem.
 func ResolvePath(explicit, xdgConfigHome, home string) string {
@@ -20,9 +20,9 @@ func ResolvePath(explicit, xdgConfigHome, home string) string {
 		return explicit
 	}
 	if xdgConfigHome != "" {
-		return filepath.Join(xdgConfigHome, "data-viewer", "config.yaml")
+		return filepath.Join(xdgConfigHome, "em-data-viewer", "config.yaml")
 	}
-	return filepath.Join(home, ".config", "data-viewer", "config.yaml")
+	return filepath.Join(home, ".config", "em-data-viewer", "config.yaml")
 }
 
 // DefaultPath resolves the config path using the current process's

@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"data-viewer/internal/config"
-	"data-viewer/internal/runner"
-	"data-viewer/internal/ui"
+	"em-data-viewer/internal/config"
+	"em-data-viewer/internal/runner"
+	"em-data-viewer/internal/ui"
 )
 
 // --- fakes (no GTK; UI/Runner/Watcher are app-boundary interfaces) ---
@@ -107,7 +107,7 @@ func TestResolveConfigPath(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ResolveConfigPath() error = %v, want nil", err)
 		}
-		want := filepath.Join("/xdg-home", "data-viewer", "config.yaml")
+		want := filepath.Join("/xdg-home", "em-data-viewer", "config.yaml")
 		if got != want {
 			t.Errorf("ResolveConfigPath() = %q, want %q", got, want)
 		}

@@ -461,12 +461,12 @@ func TestResolvePath(t *testing.T) {
 			name:          "xdg config home used when no explicit path",
 			xdgConfigHome: "/xdg",
 			home:          "/home/user",
-			want:          filepath.Join("/xdg", "data-viewer", "config.yaml"),
+			want:          filepath.Join("/xdg", "em-data-viewer", "config.yaml"),
 		},
 		{
 			name: "home fallback when neither explicit nor xdg set",
 			home: "/home/user",
-			want: filepath.Join("/home/user", ".config", "data-viewer", "config.yaml"),
+			want: filepath.Join("/home/user", ".config", "em-data-viewer", "config.yaml"),
 		},
 	}
 

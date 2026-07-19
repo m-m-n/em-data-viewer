@@ -4,8 +4,8 @@ import (
 	"strings"
 	"sync"
 
-	"data-viewer/internal/markup"
-	"data-viewer/internal/runner"
+	"em-data-viewer/internal/markup"
+	"em-data-viewer/internal/runner"
 )
 
 // translateEvent converts one runner.Event into the UI update it produces,

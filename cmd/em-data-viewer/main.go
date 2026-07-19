@@ -1,4 +1,4 @@
-// Command data-viewer runs the data-viewer desktop widget: it resolves the
+// Command em-data-viewer runs the em-data-viewer desktop widget: it resolves the
 // config file path (an optional CLI argument overrides the default XDG
 // path, FR2), then wires the config watcher, process runner and GTK4 UI
 // together (internal/app) and blocks until the user quits.
@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"os"
 
-	"data-viewer/internal/app"
+	"em-data-viewer/internal/app"
 )
 
 func main() {
@@ -36,7 +36,7 @@ func run(args []string) int {
 
 	path, err := app.ResolveConfigPath(explicit)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "data-viewer: %v\n", err)
+		fmt.Fprintf(os.Stderr, "em-data-viewer: %v\n", err)
 		return 1
 	}
 

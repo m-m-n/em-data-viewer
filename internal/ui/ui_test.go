@@ -17,18 +17,18 @@ func TestRunArgs_ExcludesConfigPathArgument(t *testing.T) {
 	}{
 		{
 			name: "invoked with an explicit config path",
-			args: []string{"data-viewer", "/custom/config.yaml"},
-			want: []string{"data-viewer"},
+			args: []string{"em-data-viewer", "/custom/config.yaml"},
+			want: []string{"em-data-viewer"},
 		},
 		{
 			name: "invoked with no arguments",
-			args: []string{"data-viewer"},
-			want: []string{"data-viewer"},
+			args: []string{"em-data-viewer"},
+			want: []string{"em-data-viewer"},
 		},
 		{
 			name: "invoked with extra stray arguments",
-			args: []string{"data-viewer", "/custom/config.yaml", "extra"},
-			want: []string{"data-viewer"},
+			args: []string{"em-data-viewer", "/custom/config.yaml", "extra"},
+			want: []string{"em-data-viewer"},
 		},
 	}
 

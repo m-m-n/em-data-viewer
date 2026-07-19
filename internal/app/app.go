@@ -11,9 +11,9 @@ import (
 
 	"github.com/diamondburned/gotk4/pkg/glib/v2"
 
-	"data-viewer/internal/config"
-	"data-viewer/internal/runner"
-	"data-viewer/internal/ui"
+	"em-data-viewer/internal/config"
+	"em-data-viewer/internal/runner"
+	"em-data-viewer/internal/ui"
 )
 
 // watchDebounce is passed to config.NewWatcher: how long the watcher waits
@@ -122,9 +122,9 @@ type App struct {
 
 // ResolveConfigPath resolves the config file path to load (AC-1): an
 // explicit CLI argument wins if non-empty; otherwise the XDG-standard user
-// config location ($XDG_CONFIG_HOME/data-viewer/config.yaml, falling back
-// to ~/.config/data-viewer/config.yaml). Thin wrapper around
-// config.DefaultPath so cmd/data-viewer's argument-parsing decision is
+// config location ($XDG_CONFIG_HOME/em-data-viewer/config.yaml, falling back
+// to ~/.config/em-data-viewer/config.yaml). Thin wrapper around
+// config.DefaultPath so cmd/em-data-viewer's argument-parsing decision is
 // unit-testable here without touching cmd's main().
 func ResolveConfigPath(explicit string) (string, error) {
 	return config.DefaultPath(explicit)

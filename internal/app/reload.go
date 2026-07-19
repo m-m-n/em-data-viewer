@@ -3,9 +3,9 @@ package app
 import (
 	"sync"
 
-	"data-viewer/internal/config"
-	"data-viewer/internal/runner"
-	"data-viewer/internal/ui"
+	"em-data-viewer/internal/config"
+	"em-data-viewer/internal/runner"
+	"em-data-viewer/internal/ui"
 )
 
 // generationTracker guards the dispatched UI-projection callback against a
