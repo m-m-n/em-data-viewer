@@ -14,6 +14,16 @@ import (
 // (Design: "empty state (zero sections)").
 const minFrameHeight = 48
 
+// windowIconName is the themed icon name the window declares at
+// construction (FR5, NFR2). It is the cross-task contract pinned in
+// IMPLEMENTATION.md Shared Components: hicolor theme files, the .desktop
+// Icon= value and this runtime name all share this exact string so icon
+// resolution succeeds on a system where the deb installed the icons.
+// Resolution itself is delegated entirely to the icon theme machinery — on
+// a system without the installed icon, gtk.Window.SetIconName is a
+// harmless no-op.
+const windowIconName = "em-data-viewer"
+
 // frame is the window chrome: an undecorated GtkApplicationWindow holding a
 // vertical stack of the config-error banner and the sections view, with a
 // live CSS provider, drag-to-move, the right-click context menu and the
@@ -50,6 +60,7 @@ func newFrame(app *gtk.Application, quit func(), onKeepAboveToggle func(enabled 
 	win.SetDecorated(false)
 	win.AddCSSClass("dv-window")
 	win.SetSizeRequest(-1, minFrameHeight)
+	win.SetIconName(windowIconName)
 
 	root := gtk.NewBox(gtk.OrientationVertical, 0)
 	win.SetChild(newContentClip(root))

@@ -76,6 +76,19 @@ func TestMinFrameHeight_MatchesDesignConstant(t *testing.T) {
 	}
 }
 
+// TestWindowIconName_MatchesDesignConstant references app-icon task0002
+// AC-1: the window icon name constant is exactly "em-data-viewer" — the
+// cross-task contract pinned in IMPLEMENTATION.md Shared Components.
+// Wiring it into gtk.Window.SetIconName at window construction (newFrame)
+// requires a real GTK window/display and is verified manually (task plan
+// Test Notes; test/README.md: GTK/GUI layers are excluded from automated
+// tests).
+func TestWindowIconName_MatchesDesignConstant(t *testing.T) {
+	if windowIconName != "em-data-viewer" {
+		t.Errorf("windowIconName = %q, want %q", windowIconName, "em-data-viewer")
+	}
+}
+
 // TestParsePixelLength_ReadsBareNumbersAsPixels references task0002 AC-4:
 // refit's chrome-height addition (windowChromeHeight) depends on reading
 // the user-configurable frame-width style value as pixels the same way the
