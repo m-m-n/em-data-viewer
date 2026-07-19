@@ -1,0 +1,25 @@
+round: 1
+executed_at: "2026-07-19T21:18:44+09:00"
+scope:
+  review_mode: diff
+  base_commit: fb810033a4842d4c0bffeb01dd394f3897c93f31
+  head_commit: 24e8b35acfcf2003dea9881284d07d0e8e235077
+  changed_files:
+    - Makefile
+    - assets/icon.svg
+    - internal/ui/window.go
+    - internal/ui/window_test.go
+plan:
+  floor: [comprehensive, spec]
+  discretionary: []
+  codex_cross_validation: false
+perspective_runs:
+  - {perspective: comprehensive, source: claude, status: completed}
+  - {perspective: spec, source: claude, status: completed}
+findings: []
+auto_fix:
+  loops_run: 0
+  applied_total: 0
+  termination: clean
+residual_critical_high: 0
+rework_required: false

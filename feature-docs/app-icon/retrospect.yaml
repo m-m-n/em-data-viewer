@@ -1,0 +1,13 @@
+feature: app-icon
+collected_at: "2026-07-19T21:20:30+09:00"
+session_ids: [9ee72fd0-243c-4148-9c74-c7a3d5f4899e]
+signals:
+  review_critical_high: []
+  conflict_reworks: []
+  file_prediction_misses:
+    - task: task0002
+      files: [internal/ui/window_test.go]
+  verification_failures: []
+  discretionary_perspectives: []
+  declined_findings: []
+lessons_candidates: []
