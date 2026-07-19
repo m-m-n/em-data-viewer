@@ -1,0 +1,65 @@
+round: 2
+executed_at: "2026-07-19T15:34:01+09:00"
+scope:
+  review_mode: diff
+  base_commit: 4b4afedadc4d0c3b8651bd5e9dafaf89a427c54d
+  head_commit: 0944aafaeec89ca51de12e48be755db21e12ef66
+  changed_files:
+    - config.yaml.example
+    - internal/app/app_test.go
+    - internal/app/reload.go
+    - internal/config/config.go
+    - internal/config/holder_test.go
+    - internal/config/load.go
+    - internal/config/load_test.go
+    - internal/ui/ui.go
+    - internal/ui/window.go
+    - internal/ui/window_test.go
+plan:
+  floor: [comprehensive, security, spec]
+  discretionary:
+    - perspective: performance
+      reason: "定期更新（UpdateSection）のホットパスに再measure/refit処理が追加されたため（round 1 から継続）"
+  codex_cross_validation: true
+perspective_runs:
+  - {perspective: comprehensive, source: claude, status: completed}
+  - {perspective: security, source: claude, status: completed}
+  - {perspective: security, source: codex, status: completed}
+  - {perspective: spec, source: claude, status: completed}
+  - {perspective: spec, source: codex, status: completed, note: "初回出力でJSON本体が欠落、再要求で取得。scratchpad 衝突の自己申告あり"}
+  - {perspective: performance, source: claude, status: completed}
+  - {perspective: performance, source: codex, status: completed}
+prior_findings_verified:
+  - {stable_id: a207380001861ae4, verdict: "fixed — task0002 のクリッピング構造で解決を claude/spec が確認"}
+  - {stable_id: e48df1d3ea423b9b, verdict: "fixed — task0002 の enter/leave-monitor 再cap 配線で解決を claude/spec が確認"}
+findings:
+  - stable_id: 451290aca9bb6e23
+    severity: medium
+    category: spec
+    file: internal/ui/window.go
+    line: 168
+    title: "Monitor re-cap misses the realized-monitor transition while straddling displays"
+    description: "再capトリガーは surface のモニタ enter/leave 時のみ refit をスケジュールする。MonitorAtSurface は最大重なりのモニタを選ぶため、2つのモニタに跨ったまま最大重なりが入れ替わっても enter/leave シグナルは発生せず、旧モニタの cap が残り続ける。"
+    suggestion: "複数モニタに跨っている間は選択モニタの変化を追跡し、enter/leave 単発の idle refit に依存しない。"
+    sources: [codex:spec]
+    confidence: 50
+    resolution: unresolved
+    resolution_reason: "medium のため completion gate 対象外。マルチモニタ跨ぎ配置という稀なエッジケースであり記録に残して継続"
+  - stable_id: dc35a38bb70a6441
+    severity: medium
+    category: spec
+    file: internal/ui/window.go
+    line: 301
+    title: "Supported non-pixel border widths are omitted from the fitted height"
+    description: "parsePixelLength は `1em` のような非ピクセル CSS 長を 0 として扱う一方、同じ frame-width 値は GTK CSS には出力される。windowChromeHeight が実際のボーダー高さを含まず、クリッピングホスト導入後は過小な default height がそのまま効くため、モニタ cap 未満でもコンテンツ最終行が切れ得る。"
+    suggestion: "border-width 値をピクセルに正規化して計測と CSS 出力を一致させるか、サポートする構文を検証で制限する。非ピクセル値のテストを追加する。"
+    sources: [codex:spec]
+    confidence: 50
+    resolution: unresolved
+    resolution_reason: "medium のため completion gate 対象外。既定設定（数値指定）では発現しないスタイル入力のエッジケースであり記録に残して継続"
+auto_fix:
+  loops_run: 0
+  applied_total: 0
+  termination: clean
+residual_critical_high: 0
+rework_required: false

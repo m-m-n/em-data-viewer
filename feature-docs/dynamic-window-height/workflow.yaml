@@ -28,15 +28,21 @@ workflow:
     status: completed
     completed_at_commit: 4b4afedadc4d0c3b8651bd5e9dafaf89a427c54d
   - id: implement
-    status: pending
+    status: completed
+    completed_at_commit: 0944aafaeec89ca51de12e48be755db21e12ef66
+    base_commit: 4b4afedadc4d0c3b8651bd5e9dafaf89a427c54d
   - id: review
-    status: pending
+    status: completed
+    completed_at_commit: 0944aafaeec89ca51de12e48be755db21e12ef66
   - id: verify
-    status: pending
-    result: null
+    status: completed
+    completed_at_commit: 0944aafaeec89ca51de12e48be755db21e12ef66
+    result: pass
     failed_items: []
+    notes: "build/test/format 全pass。TS-1/TS-2/TS-7 自動確認済み。TS-3〜TS-6 は manual — task0002 実装時に隔離 Xvfb で伸縮/クリップ/スクロール遮断を live 検証済み。マルチモニタ再cap のみ実機確認が必要"
   - id: retrospect
-    status: pending
+    status: completed
+    completed_at_commit: 0944aafaeec89ca51de12e48be755db21e12ef66
 
 tasks:
   task0001:
@@ -55,12 +61,41 @@ tasks:
     domains: [ui, input-handling]
     complexity: medium
     requirements: [FR1, FR2, FR3, FR4, NFR1, NFR2]
-    status: pending
+    status: merged
     notes: null
+    branch: em-workflow/dynamic-window-height/task0001
+  task0002:
+    title: "Make the monitor cap actually clip oversized content"
+    plan: tasks/task0002.md
+    files:
+      - internal/ui/window.go
+      - internal/ui/ui.go
+      - internal/ui/sections.go
+      - internal/ui/window_test.go
+    skills: [design-impl]
+    domains: [ui]
+    complexity: medium
+    requirements: [FR3]
+    status: merged
+    notes: null
+    branch: em-workflow/dynamic-window-height/task0002
 
 review:
-  status: pending
-  rounds_completed: 0
+  status: completed
+  rounds_completed: 2
+  plan:
+    floor: [comprehensive, security, spec]
+    discretionary:
+      - perspective: performance
+        reason: "定期更新（UpdateSection）のホットパスに再measure/refit処理が追加されたため"
+    codex_cross_validation: true
+  perspectives:
+    comprehensive: completed
+    security: completed
+    spec: completed
+    performance: completed
+  residual_critical_high: 0
+  needs_rework: false
 
 requirements:
   FR1:
@@ -79,7 +114,7 @@ requirements:
     title: "Window height capped at monitor height; overflow clipped"
     status: ok
     tbd_reason: null
-    tasks: [task0001]
+    tasks: [task0001, task0002]
     tests: [TS-4]
   FR4:
     title: "Remove window.height from config schema; silently ignore height key"

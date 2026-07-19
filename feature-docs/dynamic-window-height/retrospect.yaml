@@ -1,0 +1,27 @@
+feature: dynamic-window-height
+collected_at: "2026-07-19T15:35:37+09:00"
+session_ids: [f97e3a3c-10cc-48b1-9ce7-f2741531564d]
+signals:
+  review_critical_high:
+    - stable_id: a207380001861ae4
+      category: spec
+      file: internal/ui/window.go
+      title: "Monitor cap does not make oversized content clippable"
+      resolution: fixed
+  conflict_reworks: []
+  file_prediction_misses:
+    - task: task0001
+      files: [internal/config/holder_test.go, internal/app/app_test.go, internal/ui/window_test.go]
+  verification_failures: []
+  discretionary_perspectives:
+    - perspective: performance
+      reason: "定期更新（UpdateSection）のホットパスに再measure/refit処理が追加されたため"
+  declined_findings:
+    - stable_id: 568ba9db5ecd64e1
+      category: performance
+      resolution_reason: "consumeEvents のイベントコアレスで有界（claude/performance が反証）— codex 単独報告の誤検知"
+lessons_candidates:
+  - "GTK4 の SetDefaultSize はコンテンツの最小サイズを下回れない — 動的サイズ+上限cap の設計では最初からクリッピング構造（最小高さを toplevel に伝播しないホスト）を計画に含めるべきだった（round 1 high の原因）"
+  - "Height のようなコア struct フィールド削除は、フィールドを参照する既存テスト（holder_test.go / app_test.go）に波及する — planner の files 予測時にフィールド参照を grep して同梱すると deviation が減る"
+  - "codex/spec レビュアーの初回出力で JSON 本体が欠落（scratchpad の prompt.txt が兄弟エージェントと衝突したと自己申告）— codex-reviewer の scratchpad ファイル名を一意化する改善余地あり"
+  - "task0002 implementer が隔離 Xvfb + スクリーンショット + xdotool で GUI の受け入れ条件を live 検証し、既存テストで検出不能の実バグ（ウィンドウ CSS padding/border 分の高さ不足）を発見・修正 — GUI タスクでの live 検証の価値が高い"
