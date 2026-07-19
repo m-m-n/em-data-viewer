@@ -1,0 +1,78 @@
+schema_version: 1
+feature: default-output-size-11pt
+created: 2026-07-19
+base_branch: main
+parent_branch: em-workflow/default-output-size-11pt/integration
+
+project:
+  license: MIT
+  components:
+    main:
+      language: go
+      build_command: "go build ./..."
+      test_command: "go test ./..."
+      format_command: "gofmt -l -w ."
+      e2e_test_command: ""
+
+workflow:
+  - id: create-spec
+    artifacts: [REQUIREMENTS.md, SPEC.md]
+    status: completed
+    completed_at_commit: af8f3bb6649afa5675f1e2527d3d47e8756849c6
+  - id: design
+    artifacts: [DESIGN.md, design/]
+    status: skipped
+    skipped_reason: "サイズは 11pt とユーザーが指定済みの定数変更のみで、新たな視覚デザイン判断が無いため"
+  - id: create-plan
+    artifacts: [IMPLEMENTATION.md, VERIFICATION.md, tasks/]
+    status: completed
+    completed_at_commit: af8f3bb6649afa5675f1e2527d3d47e8756849c6
+  - id: implement
+    status: pending
+  - id: review
+    status: pending
+  - id: verify
+    status: pending
+    result: null
+    failed_items: []
+  - id: retrospect
+    status: pending
+
+tasks:
+  task0001:
+    title: "Output-size default 12pt → 11pt + token sync"
+    plan: tasks/task0001.md
+    files:
+      - internal/ui/style.go
+      - internal/ui/style_test.go
+      - design-system/tokens.yaml
+    skills: [design-impl]
+    domains: [ui]
+    complexity: low
+    requirements: [FR1, FR2, NFR1]
+    status: pending
+    notes: null
+
+review:
+  status: pending
+  rounds_completed: 0
+
+requirements:
+  FR1:
+    title: "Change SectionStyleDefaults output-size default from 12pt to 11pt"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-1, TS-2]
+  FR2:
+    title: "Sync design-system/tokens.yaml output font token size to 11pt"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-4]
+  NFR1:
+    title: "Config override behavior unchanged (only the default value changes)"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-3]
