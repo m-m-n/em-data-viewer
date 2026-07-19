@@ -29,15 +29,21 @@ workflow:
     status: completed
     completed_at_commit: fb810033a4842d4c0bffeb01dd394f3897c93f31
   - id: implement
-    status: pending
+    status: completed
+    completed_at_commit: 24e8b35acfcf2003dea9881284d07d0e8e235077
+    base_commit: fb810033a4842d4c0bffeb01dd394f3897c93f31
   - id: review
-    status: pending
+    status: completed
+    completed_at_commit: 24e8b35acfcf2003dea9881284d07d0e8e235077
   - id: verify
-    status: pending
-    result: null
+    status: completed
+    completed_at_commit: 24e8b35acfcf2003dea9881284d07d0e8e235077
+    result: pass
     failed_items: []
+    notes: "TS-1..TS-7 all pass (build/test/format/dpkg contents/renderer-missing failure/idempotency/clean git). M-1 (installed-system icon display) and M-2 (mockup visual comparison) remain as manual items."
   - id: retrospect
-    status: pending
+    status: completed
+    completed_at_commit: 24e8b35acfcf2003dea9881284d07d0e8e235077
 
 tasks:
   task0001:
@@ -50,8 +56,9 @@ tasks:
     domains: [config-infra]
     complexity: medium
     requirements: [FR1, FR2, FR3, FR4, FR6, NFR1]
-    status: pending
+    status: merged
     notes: null
+    branch: em-workflow/app-icon/task0001
   task0002:
     title: "Runtime window icon name"
     plan: tasks/task0002.md
@@ -61,12 +68,22 @@ tasks:
     domains: [ui]
     complexity: low
     requirements: [FR5, NFR2]
-    status: pending
+    status: merged
     notes: null
+    branch: em-workflow/app-icon/task0002
 
 review:
-  status: pending
-  rounds_completed: 0
+  status: completed
+  rounds_completed: 1
+  plan:
+    floor: [comprehensive, spec]
+    discretionary: []
+    codex_cross_validation: false
+  perspectives:
+    comprehensive: completed
+    spec: completed
+  residual_critical_high: 0
+  needs_rework: false
 
 requirements:
   FR1:
