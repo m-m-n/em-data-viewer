@@ -1,0 +1,101 @@
+schema_version: 1
+feature: dynamic-window-height
+created: 2026-07-19
+base_branch: main
+parent_branch: em-workflow/dynamic-window-height/integration
+
+project:
+  license: MIT
+  components:
+    main:
+      language: go
+      build_command: "go build ./..."
+      test_command: "go test ./..."
+      format_command: "gofmt -l -w ."
+      e2e_test_command: ""
+
+workflow:
+  - id: create-spec
+    artifacts: [REQUIREMENTS.md, SPEC.md]
+    status: completed
+    completed_at_commit: 4b4afedadc4d0c3b8651bd5e9dafaf89a427c54d
+  - id: design
+    artifacts: [DESIGN.md, design/]
+    status: skipped
+    skipped_reason: "見た目の変更はなく、既存の外観のままサイズ決定ロジックのみ変わるため視覚デザイン判断が不要"
+  - id: create-plan
+    artifacts: [IMPLEMENTATION.md, VERIFICATION.md, tasks/]
+    status: completed
+    completed_at_commit: 4b4afedadc4d0c3b8651bd5e9dafaf89a427c54d
+  - id: implement
+    status: pending
+  - id: review
+    status: pending
+  - id: verify
+    status: pending
+    result: null
+    failed_items: []
+  - id: retrospect
+    status: pending
+
+tasks:
+  task0001:
+    title: "Dynamic window height & config height removal"
+    plan: tasks/task0001.md
+    files:
+      - internal/config/config.go
+      - internal/config/load.go
+      - internal/config/load_test.go
+      - internal/app/reload.go
+      - internal/ui/ui.go
+      - internal/ui/window.go
+      - internal/ui/style_test.go
+      - config.yaml.example
+    skills: [design-impl]
+    domains: [ui, input-handling]
+    complexity: medium
+    requirements: [FR1, FR2, FR3, FR4, NFR1, NFR2]
+    status: pending
+    notes: null
+
+review:
+  status: pending
+  rounds_completed: 0
+
+requirements:
+  FR1:
+    title: "Window height determined dynamically from content natural height"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-3]
+  FR2:
+    title: "Window height tracks content changes at runtime"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-3, TS-6]
+  FR3:
+    title: "Window height capped at monitor height; overflow clipped"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-4]
+  FR4:
+    title: "Remove window.height from config schema; silently ignore height key"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-1, TS-2, TS-7]
+  NFR1:
+    title: "Config package remains GTK-free and testable"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-1, TS-2]
+  NFR2:
+    title: "Preserve zero-sections minimum height and width behavior"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-2, TS-5]
