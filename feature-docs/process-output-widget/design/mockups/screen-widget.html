@@ -74,6 +74,9 @@
     font: var(--typography-section-label);
     color: var(--color-on-surface-dim);
   }
+  /* rendered output: all trailing newlines are stripped before rendering
+     (interior blank lines are content and stay), so the text's last line
+     box sits directly above the divider/padding below it */
   .section-output {
     font: var(--typography-output);
     color: var(--color-on-surface);
@@ -123,6 +126,34 @@
         <pre class="section-output">14:02:58 systemd[1]: Started daily job.
 14:03:01 kernel: usb 1-2: new device
 14:03:15 NetworkManager: connectivity ok</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── trailing-newline: raw stdout ends with "\n" (nearly every command
+     does); all trailing newlines are stripped before rendering, so no
+     blank line appears between the output text and the rule below it.
+     Interior blank lines are content and are preserved. ── -->
+<section data-state="trailing-newline">
+  <h2>trailing-newline (stripped — no blank line above the rule)</h2>
+  <div class="widget" style="width: 480px;">
+    <div class="row">
+      <div class="section">
+        <div class="section-label">clock</div>
+        <!-- raw: "2026-07-16 14:03:22\n" -->
+        <pre class="section-output">2026-07-16 14:03:22</pre>
+      </div>
+    </div>
+    <div class="hdivider"></div>
+    <div class="row">
+      <div class="section">
+        <div class="section-label">loadavg</div>
+        <!-- raw: "load: 1.29 (1m)\n\ncpu: 300% ps\n\n" — the interior
+             blank line stays, both trailing newlines are stripped -->
+        <pre class="section-output">load: 1.29 (1m)
+
+cpu: 300% ps</pre>
       </div>
     </div>
   </div>
