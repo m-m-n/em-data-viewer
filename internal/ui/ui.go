@@ -57,6 +57,11 @@ func New(quit func(), onKeepAboveToggle func(enabled bool)) *UI {
 		quit: quit,
 	}
 	u.app.ConnectActivate(func() {
+		// Registration must happen after activation begins (GTK is
+		// initialized) and before newFrame builds the window, so the icon
+		// theme has the resource path available the moment the window
+		// requests windowIconName (task0001 Design; SPEC FR3).
+		registerIconResources()
 		u.frame = newFrame(u.app, u.requestQuit, onKeepAboveToggle)
 		u.frame.win.Present()
 	})

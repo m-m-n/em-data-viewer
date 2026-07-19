@@ -1,20 +1,41 @@
-APP_NAME   := em-data-viewer
-VERSION    ?= 0.1.0
-ARCH       := $(shell dpkg --print-architecture)
-BUILD_DIR  := build
-PKG_ROOT   := $(BUILD_DIR)/$(APP_NAME)_$(VERSION)_$(ARCH)
-DEB_FILE   := $(BUILD_DIR)/$(APP_NAME)_$(VERSION)_$(ARCH).deb
-ICON_SRC   := assets/icon.svg
-ICON_DIR   := $(BUILD_DIR)/icons
-ICON_SIZES := 48 64 128 256
+APP_NAME     := em-data-viewer
+VERSION      ?= 0.1.0
+ARCH         := $(shell dpkg --print-architecture)
+BUILD_DIR    := build
+PKG_ROOT     := $(BUILD_DIR)/$(APP_NAME)_$(VERSION)_$(ARCH)
+DEB_FILE     := $(BUILD_DIR)/$(APP_NAME)_$(VERSION)_$(ARCH).deb
+ICON_SRC     := assets/icon.svg
+ICON_DIR     := $(BUILD_DIR)/icons
+ICON_SIZES   := 48 64 128 256
+EMBED_DIR    := $(BUILD_DIR)/embed-icons
+EMBED_SIZES  := 16 32 48 64 128 256
+GRESOURCE_XML := assets/icon.gresource.xml
+GRESOURCE_OUT := internal/ui/icon.gresource
 
-.PHONY: all build dpkg icons clean
+.PHONY: all build dpkg icons resources test clean
 
 all: build
 
-build:
+build: resources
 	mkdir -p $(BUILD_DIR)
 	CC=clang go build -trimpath -ldflags="-s -w" -o $(BUILD_DIR)/$(APP_NAME) ./cmd/$(APP_NAME)
+
+# resources renders the six icon sizes go:embed needs and compiles them
+# into internal/ui/icon.gresource (task0001 FR1). Both build-time tools are
+# checked up front so a missing one fails fast, before any partial output.
+resources:
+	@command -v rsvg-convert >/dev/null 2>&1 || { echo "resources: rsvg-convert not found on PATH" >&2; exit 1; }
+	@command -v glib-compile-resources >/dev/null 2>&1 || { echo "resources: glib-compile-resources not found on PATH" >&2; exit 1; }
+	mkdir -p $(EMBED_DIR)
+	for s in $(EMBED_SIZES); do \
+		rsvg-convert -w $$s -h $$s -o $(EMBED_DIR)/$(APP_NAME)-$$s.png $(ICON_SRC); \
+	done
+	glib-compile-resources --sourcedir=$(EMBED_DIR) --target=$(GRESOURCE_OUT) $(GRESOURCE_XML)
+
+# test guarantees the embedded resource bundle exists before go:embed is
+# compiled (task0001 FR2): a fresh checkout has no internal/ui/icon.gresource.
+test: resources
+	go test ./...
 
 icons:
 	@command -v rsvg-convert >/dev/null 2>&1 || { echo "icons: rsvg-convert not found on PATH" >&2; exit 1; }

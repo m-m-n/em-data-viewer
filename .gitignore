@@ -1,2 +1,3 @@
 .claude/worktrees/
 /build/
+/internal/ui/icon.gresource

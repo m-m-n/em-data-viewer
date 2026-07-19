@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  gresource manifest for the embedded app icon (task0001, FR1).
+
+  The prefix is the resource base path pinned in IMPLEMENTATION.md Shared
+  Components ("Resource base path"); it must match, verbatim, the
+  iconResourceBasePath constant added to the icon theme's resource path at
+  runtime by internal/ui/resources.go. Each alias reproduces the
+  hicolor-like "{S}x{S}/apps/em-data-viewer.png" layout GTK's icon theme
+  machinery expects under a resource base path, while the source files
+  themselves are the flat "em-data-viewer-{S}.png" names rendered by the
+  Makefile `resources` target into build/embed-icons/ (--sourcedir).
+  PNGs are already compressed, so they are stored uncompressed here.
+-->
+<gresources>
+  <gresource prefix="/net/laser5/em-data-viewer/icons">
+    <file alias="16x16/apps/em-data-viewer.png" compressed="false">em-data-viewer-16.png</file>
+    <file alias="32x32/apps/em-data-viewer.png" compressed="false">em-data-viewer-32.png</file>
+    <file alias="48x48/apps/em-data-viewer.png" compressed="false">em-data-viewer-48.png</file>
+    <file alias="64x64/apps/em-data-viewer.png" compressed="false">em-data-viewer-64.png</file>
+    <file alias="128x128/apps/em-data-viewer.png" compressed="false">em-data-viewer-128.png</file>
+    <file alias="256x256/apps/em-data-viewer.png" compressed="false">em-data-viewer-256.png</file>
+  </gresource>
+</gresources>
