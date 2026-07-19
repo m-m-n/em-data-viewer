@@ -28,15 +28,20 @@ workflow:
     status: completed
     completed_at_commit: af8f3bb6649afa5675f1e2527d3d47e8756849c6
   - id: implement
-    status: pending
+    status: completed
+    completed_at_commit: 1c093cd56d1d2a1a72ba279470275df41cadd2cb
+    base_commit: af8f3bb6649afa5675f1e2527d3d47e8756849c6
   - id: review
-    status: pending
+    status: completed
+    completed_at_commit: 1c093cd56d1d2a1a72ba279470275df41cadd2cb
   - id: verify
-    status: pending
-    result: null
+    status: completed
+    completed_at_commit: 1c093cd56d1d2a1a72ba279470275df41cadd2cb
+    result: pass
     failed_items: []
   - id: retrospect
-    status: pending
+    status: completed
+    completed_at_commit: 1c093cd56d1d2a1a72ba279470275df41cadd2cb
 
 tasks:
   task0001:
@@ -50,12 +55,22 @@ tasks:
     domains: [ui]
     complexity: low
     requirements: [FR1, FR2, NFR1]
-    status: pending
+    status: merged
     notes: null
+    branch: em-workflow/default-output-size-11pt/task0001
 
 review:
-  status: pending
-  rounds_completed: 0
+  status: completed
+  rounds_completed: 1
+  plan:
+    floor: [comprehensive, spec]
+    discretionary: []
+    codex_cross_validation: false
+  perspectives:
+    comprehensive: completed
+    spec: completed
+  residual_critical_high: 0
+  needs_rework: false
 
 requirements:
   FR1:

@@ -1,0 +1,11 @@
+feature: default-output-size-11pt
+collected_at: "2026-07-19T18:19:43+09:00"
+session_ids: [0f35bd23-5a81-4bdb-911d-578eca407afc]
+signals:
+  review_critical_high: []
+  conflict_reworks: []
+  file_prediction_misses: []
+  verification_failures: []
+  discretionary_perspectives: []
+  declined_findings: []
+lessons_candidates: []
