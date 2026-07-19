@@ -1,0 +1,15 @@
+feature: section-row-break
+collected_at: "2026-07-19T18:59:34+09:00"
+session_ids: [4d3b2527-8328-403c-b9a7-42cf581429dd]
+signals:
+  review_critical_high: []
+  conflict_reworks: []
+  file_prediction_misses: []
+  verification_failures: []
+  discretionary_perspectives: []
+  declined_findings:
+    - stable_id: 5a1c9e33d41f0b72
+      category: spec
+      resolution_reason: "既存前例に従った配置（純関数の行詰めヘルパーは section-row-packing 以来 internal/ui/sections.go に置かれ headless の go test で通る）。NFR3 の意図は満たされており、パッケージ分離はスコープ外のリファクタリング。"
+lessons_candidates:
+  - "SPEC の NFR に『GUI-free code (no gotk4 import)』のような文字どおりのパッケージ境界表現を書くと、既存前例（ui パッケージ内の純関数 + テーブル駆動テスト）と齟齬する spec 指摘を誘発する。意図（headless テスト可能性）ベースの表現にするとよい。"
