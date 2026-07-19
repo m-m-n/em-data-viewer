@@ -49,7 +49,6 @@ func newFrame(app *gtk.Application, quit func(), onKeepAboveToggle func(enabled 
 
 	sv := newSectionsView()
 	root.Append(sv.widget)
-	attachReflowTriggers(win, sv)
 
 	display := gdk.DisplayGetDefault()
 
@@ -62,6 +61,7 @@ func newFrame(app *gtk.Application, quit func(), onKeepAboveToggle func(enabled 
 		windowStyle:      MergeStyle(WindowStyleDefaults, nil),
 		keepAboveBackend: selectKeepAboveBackend(display),
 	}
+	attachReflowTriggers(win, f)
 
 	if display != nil {
 		gtk.StyleContextAddProviderForDisplay(display, f.css, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
@@ -86,16 +86,17 @@ func newFrame(app *gtk.Application, quit func(), onKeepAboveToggle func(enabled 
 }
 
 // attachReflowTriggers wires the window's default-width property notify and
-// map signal to a deferred reflow of the sections view (Design: Triggers;
-// FR4). Each defers by one main-loop iteration via glib.IdleAdd so the
-// sections container's allocation has settled to the new size by the time
-// reflow measures it.
-func attachReflowTriggers(win *gtk.ApplicationWindow, sv *sectionsView) {
+// map signal to a deferred row-repack-plus-height-refit of the frame
+// (Design: Triggers; FR4; task0001 Design: "Shrink requirement"). Each
+// defers by one main-loop iteration via glib.IdleAdd so the sections
+// container's allocation has settled to the new size by the time reflow
+// measures it.
+func attachReflowTriggers(win *gtk.ApplicationWindow, f *frame) {
 	win.NotifyProperty("default-width", func() {
-		glib.IdleAdd(sv.reflow)
+		glib.IdleAdd(f.reflowAndRefit)
 	})
 	win.ConnectMap(func() {
-		glib.IdleAdd(sv.reflow)
+		glib.IdleAdd(f.reflowAndRefit)
 	})
 }
 
@@ -157,20 +158,85 @@ func (f *frame) toplevelSurface() gdk.Surfacer {
 	return native.Surface()
 }
 
-// applySettings applies window-level settings (size and style overrides)
-// without recreating the window (FR1: styles are live).
+// applySettings applies window-level settings (width and style overrides)
+// without recreating the window (FR1: styles are live). There is no
+// configurable height (task0001): the height is derived from content by
+// refit below. A style change can change the content's natural height
+// (e.g. a font-size change), so this also re-fits the window height.
 func (f *frame) applySettings(settings WindowSettings) {
-	if settings.Width > 0 && settings.Height > 0 {
-		f.win.SetDefaultSize(settings.Width, settings.Height)
+	if settings.Width > 0 {
+		f.win.SetDefaultSize(settings.Width, -1)
 	}
 	f.windowStyle = MergeStyle(WindowStyleDefaults, settings.Style)
 	f.restyle()
+	f.refit()
 }
 
 // restyle rebuilds and reloads the full stylesheet (window + every current
 // section) so style changes apply live without recreating widgets.
 func (f *frame) restyle() {
 	f.css.LoadFromString(buildStylesheet(f.windowStyle, f.sections.styleEntries()))
+}
+
+// reflowAndRefit repacks the sections view's rows for the window's current
+// width, then re-fits the window height to the result (task0001 Design:
+// "Shrink requirement" re-fit triggers driven by a width change or the
+// window becoming mapped).
+func (f *frame) reflowAndRefit() {
+	f.sections.reflow()
+	f.refit()
+}
+
+// refit resizes the window's height to fit the root box's current natural
+// content height (banner + sections), capped at the monitor height once the
+// window is realized (task0001 Design: "Shrink requirement", "Monitor
+// cap"). Width is left untouched. The minimum frame height (NFR2) is
+// additionally enforced as a hard floor by win.SetSizeRequest in newFrame;
+// clamping to it here too keeps the computed default size consistent with
+// that floor.
+func (f *frame) refit() {
+	_, natural, _, _ := f.root.Measure(gtk.OrientationVertical, f.root.AllocatedWidth())
+	height := fitHeight(natural, minFrameHeight, f.monitorHeight())
+
+	width, _ := f.win.DefaultSize()
+	f.win.SetDefaultSize(width, height)
+}
+
+// monitorHeight returns the height, in pixels, of the monitor the realized
+// window's surface currently sits on, or 0 before the window is realized
+// (no monitor known yet, so refit applies no cap; task0001 Design:
+// "Monitor cap").
+func (f *frame) monitorHeight() int {
+	surface := f.toplevelSurface()
+	if surface == nil {
+		return 0
+	}
+	display := gdk.DisplayGetDefault()
+	if display == nil {
+		return 0
+	}
+	monitor := display.MonitorAtSurface(surface)
+	if monitor == nil {
+		return 0
+	}
+	return monitor.Geometry().Height()
+}
+
+// fitHeight computes the window height to apply, given the content's
+// current natural height, the minimum frame height (NFR2, so a
+// zero-section window stays grabbable), and the monitor height cap (0 =
+// monitor not yet known, so no cap is applied; task0001 Design: "Monitor
+// cap"). Pure and GUI-free so it is unit-testable independently of GTK
+// measurement/monitor lookups (task0001 Test Notes).
+func fitHeight(contentNatural, minHeight, monitorHeight int) int {
+	height := contentNatural
+	if height < minHeight {
+		height = minHeight
+	}
+	if monitorHeight > 0 && height > monitorHeight {
+		height = monitorHeight
+	}
+	return height
 }
 
 // attachDragToMove starts a compositor-side interactive move once a
