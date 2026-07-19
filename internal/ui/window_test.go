@@ -2,12 +2,16 @@ package ui
 
 import "testing"
 
-// TestFitHeight_ClampsToMinimumAndMonitorCap references task0001 AC-7/AC-8:
-// the target height is never below minHeight (NFR2, the empty-state grab
-// handle), and never above a known monitor height (FR3); before the window
-// is realized (monitorHeight == 0), no cap applies. Kept as a pure,
-// GUI-free helper per the task plan's test notes so the sizing arithmetic
-// is unit-testable independently of GTK measurement/monitor lookups.
+// TestFitHeight_ClampsToMinimumAndMonitorCap references task0001 AC-7/AC-8
+// and task0002 AC-1: the target height is never below minHeight (NFR2, the
+// empty-state grab handle), and never above a known monitor height (FR3);
+// before the window is realized (monitorHeight == 0), no cap applies. This
+// formula is unchanged by task0002 — that task's content-clip host
+// restructuring (window.go) is what makes the toolkit actually allocate
+// the window at this computed height instead of forcing it back up to
+// content's minimum. Kept as a pure, GUI-free helper per the task plan's
+// test notes so the sizing arithmetic is unit-testable independently of
+// GTK measurement/monitor lookups.
 func TestFitHeight_ClampsToMinimumAndMonitorCap(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -64,9 +68,42 @@ func TestFitHeight_ClampsToMinimumAndMonitorCap(t *testing.T) {
 }
 
 // TestMinFrameHeight_MatchesDesignConstant references AC-8: the empty-state
-// minimum frame height stays 48px (unchanged by task0001).
+// minimum frame height stays 48px (unchanged by task0001 and task0002's
+// clipping-structure restructuring — task0002 Preserved behavior).
 func TestMinFrameHeight_MatchesDesignConstant(t *testing.T) {
 	if minFrameHeight != 48 {
 		t.Errorf("minFrameHeight = %d, want 48", minFrameHeight)
+	}
+}
+
+// TestParsePixelLength_ReadsBareNumbersAsPixels references task0002 AC-4:
+// refit's chrome-height addition (windowChromeHeight) depends on reading
+// the user-configurable frame-width style value as pixels the same way the
+// rest of this app treats a bare number as pixels (style.go's
+// normalizeLength). New pure helper introduced by task0002 (Test Notes),
+// so it is covered directly rather than only through GTK-level rendering.
+func TestParsePixelLength_ReadsBareNumbersAsPixels(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want int
+	}{
+		{name: "plain pixel value", in: "1px", want: 1},
+		{name: "multi-digit pixel value", in: "12px", want: 12},
+		{name: "fractional pixel value truncates", in: "2.5px", want: 2},
+		{name: "surrounding whitespace is trimmed", in: "  3px  ", want: 3},
+		{name: "zero", in: "0px", want: 0},
+		{name: "empty value contributes nothing", in: "", want: 0},
+		{name: "non-numeric value contributes nothing", in: "thick", want: 0},
+		{name: "non-pixel unit contributes nothing", in: "1em", want: 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parsePixelLength(tt.in)
+			if got != tt.want {
+				t.Errorf("parsePixelLength(%q) = %d, want %d", tt.in, got, tt.want)
+			}
+		})
 	}
 }

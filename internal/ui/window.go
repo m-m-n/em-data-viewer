@@ -2,6 +2,8 @@ package ui
 
 import (
 	"log"
+	"strconv"
+	"strings"
 
 	"github.com/diamondburned/gotk4/pkg/gdk/v4"
 	"github.com/diamondburned/gotk4/pkg/glib/v2"
@@ -42,7 +44,8 @@ func newFrame(app *gtk.Application, quit func(), onKeepAboveToggle func(enabled 
 	win.SetSizeRequest(-1, minFrameHeight)
 
 	root := gtk.NewBox(gtk.OrientationVertical, 0)
-	win.SetChild(root)
+	win.SetChild(newContentClip(root))
+	blockScrollGestures(win)
 
 	b := newBanner()
 	root.Append(b.widget)
@@ -62,6 +65,7 @@ func newFrame(app *gtk.Application, quit func(), onKeepAboveToggle func(enabled 
 		keepAboveBackend: selectKeepAboveBackend(display),
 	}
 	attachReflowTriggers(win, f)
+	attachMonitorRecapTrigger(win, f)
 
 	if display != nil {
 		gtk.StyleContextAddProviderForDisplay(display, f.css, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
@@ -97,6 +101,74 @@ func attachReflowTriggers(win *gtk.ApplicationWindow, f *frame) {
 	})
 	win.ConnectMap(func() {
 		glib.IdleAdd(f.reflowAndRefit)
+	})
+}
+
+// newContentClip hosts content in a structure whose own minimum height does
+// not include content's minimum height, so refit's capped SetDefaultSize
+// can actually take effect instead of being overridden back up to content's
+// full minimum (Design: "Clipping requirement"). A GtkScrolledWindow does
+// this only when its vertical scrollbar policy is not NEVER: with any other
+// policy its measure() reports a minimum independent of the child (GTK
+// falls back to min-content-height, 0 by default) instead of forwarding the
+// child's; NEVER is the one policy value that forwards it, reproducing the
+// original bug. AUTOMATIC is used here for that reason, not because a
+// scrollbar should ever show — both scrollbars are hidden outright below,
+// and blockScrollGestures (wired by the caller) stops wheel/touch input
+// from moving the hidden overflow into view regardless of policy (AC-2).
+// The horizontal policy stays NEVER with natural width propagated, which
+// keeps width sized straight through from content exactly as when content
+// was the window's direct child (task plan "Preserved behavior": width is
+// untouched). refit() measures content directly rather than through this
+// host, whose minimum/natural are now deliberately decoupled from it.
+func newContentClip(content gtk.Widgetter) *gtk.ScrolledWindow {
+	clip := gtk.NewScrolledWindow()
+	clip.SetChild(content)
+	clip.SetPolicy(gtk.PolicyNever, gtk.PolicyAutomatic)
+	clip.SetPropagateNaturalWidth(true)
+	clip.SetPropagateNaturalHeight(false)
+	gtk.BaseWidget(clip.HScrollbar()).SetVisible(false)
+	gtk.BaseWidget(clip.VScrollbar()).SetVisible(false)
+	return clip
+}
+
+// blockScrollGestures neutralizes the content clip host's built-in
+// scroll-wheel/touchpad handling by claiming every scroll event in the
+// CAPTURE phase at the window level, before it can ever reach the clip
+// host's own BUBBLE-phase scroll controller (the one that would otherwise
+// pan the clipped overflow into view). GTK's event dispatch runs the full
+// capture pass root-to-target first and only runs the bubble pass
+// afterwards if nothing claimed the event during capture, so claiming here
+// skips the bubble pass — and the built-in handler with it — entirely.
+// This is the same CAPTURE-phase precedence attachDragToMove below relies
+// on. No scrollbar is ever shown (newContentClip) and no gesture can reveal
+// hidden content (AC-2; Design: "Clipping requirement").
+func blockScrollGestures(win *gtk.ApplicationWindow) {
+	scroll := gtk.NewEventControllerScroll(gtk.EventControllerScrollBothAxes | gtk.EventControllerScrollKinetic)
+	scroll.SetPropagationPhase(gtk.PhaseCapture)
+	scroll.ConnectScroll(func(_, _ float64) bool {
+		return true // claim unconditionally; see doc comment above.
+	})
+	gtk.BaseWidget(win).AddController(scroll)
+}
+
+// attachMonitorRecapTrigger observes the window's monitor once realized,
+// via its GdkSurface's enter-monitor/leave-monitor signals, and schedules
+// the existing deferred reflow+refit whenever it fires, so moving the
+// window onto a monitor with a different height re-applies the height cap
+// (Design: "Monitor-change re-cap"; AC-3). Registered from the realize
+// signal because the surface these signals live on does not exist before
+// then.
+func attachMonitorRecapTrigger(win *gtk.ApplicationWindow, f *frame) {
+	win.ConnectRealize(func() {
+		surface := f.toplevelSurface()
+		if surface == nil {
+			return
+		}
+		recap := func(*gdk.Monitor) { glib.IdleAdd(f.reflowAndRefit) }
+		base := gdk.BaseSurface(surface)
+		base.ConnectEnterMonitor(recap)
+		base.ConnectLeaveMonitor(recap)
 	})
 }
 
@@ -188,18 +260,50 @@ func (f *frame) reflowAndRefit() {
 }
 
 // refit resizes the window's height to fit the root box's current natural
-// content height (banner + sections), capped at the monitor height once the
-// window is realized (task0001 Design: "Shrink requirement", "Monitor
-// cap"). Width is left untouched. The minimum frame height (NFR2) is
-// additionally enforced as a hard floor by win.SetSizeRequest in newFrame;
-// clamping to it here too keeps the computed default size consistent with
-// that floor.
+// content height (banner + sections) plus the window's own CSS chrome
+// (windowChromeHeight), capped at the monitor height once the window is
+// realized (task0001 Design: "Shrink requirement", "Monitor cap"). Width is
+// left untouched. The minimum frame height (NFR2) is additionally enforced
+// as a hard floor by win.SetSizeRequest in newFrame; clamping to it here
+// too keeps the computed default size consistent with that floor.
+//
+// Before task0002, omitting the chrome height here was invisible: the
+// undersized SetDefaultSize request was always overridden back up by the
+// toolkit forcing the window to content's real minimum (the very
+// propagation task0002 removes so the monitor cap can hold). With that
+// override gone, refit's own target must be accurate on its own.
 func (f *frame) refit() {
 	_, natural, _, _ := f.root.Measure(gtk.OrientationVertical, f.root.AllocatedWidth())
-	height := fitHeight(natural, minFrameHeight, f.monitorHeight())
+	target := natural + f.windowChromeHeight()
+	height := fitHeight(target, minFrameHeight, f.monitorHeight())
 
 	width, _ := f.win.DefaultSize()
 	f.win.SetDefaultSize(width, height)
+}
+
+// windowChromeHeight is the vertical space the frame's own .dv-window CSS
+// box (buildStylesheet/windowCSS) adds above and below its child: padding
+// (the fixed windowPadding token) plus the border (the user-configurable
+// frame-width style value), each counted on both the top and bottom edge.
+// This box sits on f.win itself, outside f.root — outside the content
+// refit measures directly — so it is never included in that measurement
+// and must be added explicitly.
+func (f *frame) windowChromeHeight() int {
+	return 2*windowPadding + 2*parsePixelLength(f.windowStyle["frame-width"])
+}
+
+// parsePixelLength reads a CSS length as pixels, following this app's
+// existing "a bare number means pixels" convention (style.go's
+// normalizeLength, AC-3 elsewhere): a trailing "px" suffix is stripped
+// before parsing. Any other unit — or a value that fails to parse at all —
+// contributes 0 rather than erroring: style values are user input, and a
+// window resize computation must never fail because of one.
+func parsePixelLength(v string) int {
+	n, err := strconv.ParseFloat(strings.TrimSuffix(strings.TrimSpace(v), "px"), 64)
+	if err != nil {
+		return 0
+	}
+	return int(n)
 }
 
 // monitorHeight returns the height, in pixels, of the monitor the realized
