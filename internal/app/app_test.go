@@ -273,6 +273,103 @@ func TestApplyConfig_NoRehydrationWhenStoreHasNoRecordedState(t *testing.T) {
 	}
 }
 
+// --- section-row-break task0001, AC-4: break entries excluded from the
+// runner section list and rehydration, but not from the view models ---
+
+// sampleConfigWithBreak returns a config whose Sections contain a break
+// entry between two real sections, mirroring sampleConfig's real sections.
+func sampleConfigWithBreak() config.Config {
+	return config.Config{
+		Window: config.Window{Width: 800, Style: map[string]string{"background": "#000"}},
+		Sections: []config.SectionConfig{
+			{Name: "clock", Command: "date", Mode: config.ModeInterval, Interval: 5 * time.Second, MaxLines: 100},
+			{IsBreak: true},
+			{Name: "", Command: "tail -f /tmp/x", Mode: config.ModeStream, MaxLines: 50},
+		},
+	}
+}
+
+// TestRunnerSections_ExcludesBreakEntries references AC-4: the runner
+// section list contains no break entries.
+func TestRunnerSections_ExcludesBreakEntries(t *testing.T) {
+	cfg := sampleConfigWithBreak()
+
+	got := runnerSections(cfg.Sections)
+
+	want := []runner.SectionConfig{
+		{Key: cfg.Sections[0].Key(), Command: "date", Mode: runner.ModeInterval, Interval: 5 * time.Second, MaxLines: 100},
+		{Key: cfg.Sections[2].Key(), Command: "tail -f /tmp/x", Mode: runner.ModeStream, MaxLines: 50},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("runnerSections(...) = %+v, want %+v (break entry excluded)", got, want)
+	}
+}
+
+// TestRehydrationsFor_ExcludesBreakEntries references AC-4: the
+// rehydration list contains no break entries, even when the store happens
+// to have an entry under a break's (zero-valued) key.
+func TestRehydrationsFor_ExcludesBreakEntries(t *testing.T) {
+	cfg := sampleConfigWithBreak()
+	store := newSectionStore()
+	store.set(cfg.Sections[0].Key(), "<b>12:00:00</b>", false)
+	// A break entry's Key() is always the same zero-valued string; if a
+	// rogue store entry existed under that key, rehydrationsFor must still
+	// never surface it for the break position.
+	store.set((config.SectionConfig{}).Key(), "should never surface", false)
+
+	got := rehydrationsFor(cfg.Sections, store)
+
+	want := []sectionRehydration{
+		{key: cfg.Sections[0].Key(), text: "<b>12:00:00</b>", isError: false},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("rehydrationsFor(...) = %+v, want %+v (break entry excluded)", got, want)
+	}
+}
+
+// TestSectionViewModels_MarksBreakEntriesAndPreservesOrder covers the
+// conveyance half of AC-4/FR2: unlike the runner list and rehydration, the
+// view-model list keeps one entry per config entry (order preserved),
+// marking the break entry so the ui layer can branch on it.
+func TestSectionViewModels_MarksBreakEntriesAndPreservesOrder(t *testing.T) {
+	cfg := sampleConfigWithBreak()
+
+	got := sectionViewModels(cfg.Sections)
+
+	want := []ui.SectionViewModel{
+		{Key: cfg.Sections[0].Key(), Label: "clock", Style: cfg.Sections[0].Style},
+		{IsBreak: true},
+		{Key: cfg.Sections[2].Key(), Label: "", Style: cfg.Sections[2].Style},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("sectionViewModels(...) = %+v, want %+v", got, want)
+	}
+}
+
+// TestApplyConfig_BreakEntryExcludedFromRunnerButKeptInSetSections
+// integrates the above through applyConfig: a break-containing config
+// still reconciles the runner with only the real sections, while
+// SetSections receives one entry per config entry including the break.
+func TestApplyConfig_BreakEntryExcludedFromRunnerButKeptInSetSections(t *testing.T) {
+	cfg := sampleConfigWithBreak()
+	u := &fakeUI{}
+	r := &fakeRunner{}
+	store := newSectionStore()
+	gens := newGenerationTracker()
+
+	applyConfig(cfg, nil, r, store, gens.next(), gens, u, syncDispatch)
+
+	if len(r.applyCalls) != 1 || len(r.applyCalls[0]) != 2 {
+		t.Fatalf("runner.Apply got %+v, want exactly 2 sections (break excluded)", r.applyCalls)
+	}
+	if len(u.sections) != 1 || len(u.sections[0]) != 3 {
+		t.Fatalf("SetSections got %+v, want exactly 3 view models (break included)", u.sections)
+	}
+	if !u.sections[0][1].IsBreak {
+		t.Errorf("SetSections view model at the break's position = %+v, want IsBreak = true", u.sections[0][1])
+	}
+}
+
 // --- AC-4: reconcile off the dispatched path ---
 
 // TestApplyConfig_RunnerReconcileHappensBeforeUIDispatch references AC-4:

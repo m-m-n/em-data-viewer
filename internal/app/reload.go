@@ -132,6 +132,9 @@ type sectionRehydration struct {
 func rehydrationsFor(sections []config.SectionConfig, store *sectionStore) []sectionRehydration {
 	var out []sectionRehydration
 	for _, s := range sections {
+		if s.IsBreak {
+			continue
+		}
 		key := s.Key()
 		st, ok := store.get(key)
 		if !ok {
@@ -144,10 +147,17 @@ func rehydrationsFor(sections []config.SectionConfig, store *sectionStore) []sec
 
 // sectionViewModels translates config sections into UI view models,
 // preserving config order (display order comes from slice order; Key is
-// identity, not order).
+// identity, not order) — including break entries (section-row-break
+// task0001 FR2, FR4): one view model per config entry so the ui layer's
+// row-break positions line up with the original config positions;
+// a break entry becomes a bare {IsBreak: true} marker.
 func sectionViewModels(sections []config.SectionConfig) []ui.SectionViewModel {
 	out := make([]ui.SectionViewModel, len(sections))
 	for i, s := range sections {
+		if s.IsBreak {
+			out[i] = ui.SectionViewModel{IsBreak: true}
+			continue
+		}
 		out[i] = ui.SectionViewModel{
 			Key:   s.Key(),
 			Label: s.Name,
@@ -158,18 +168,22 @@ func sectionViewModels(sections []config.SectionConfig) []ui.SectionViewModel {
 }
 
 // runnerSections translates config sections into the runner package's
-// local SectionConfig. internal/runner does not import internal/config
-// (layer rule); the app layer owns this conversion.
+// local SectionConfig, excluding break entries (section-row-break task0001
+// FR2, AC-4): a break never starts a process. internal/runner does not
+// import internal/config (layer rule); the app layer owns this conversion.
 func runnerSections(sections []config.SectionConfig) []runner.SectionConfig {
-	out := make([]runner.SectionConfig, len(sections))
-	for i, s := range sections {
-		out[i] = runner.SectionConfig{
+	out := make([]runner.SectionConfig, 0, len(sections))
+	for _, s := range sections {
+		if s.IsBreak {
+			continue
+		}
+		out = append(out, runner.SectionConfig{
 			Key:      s.Key(),
 			Command:  s.Command,
 			Mode:     runner.Mode(s.Mode),
 			Interval: s.Interval,
 			MaxLines: s.MaxLines,
-		}
+		})
 	}
 	return out
 }
