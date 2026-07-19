@@ -63,6 +63,11 @@ type yamlSection struct {
 	Interval string            `yaml:"interval"`
 	MaxLines *int              `yaml:"max_lines"`
 	Style    map[string]string `yaml:"style"`
+	// Type is empty for a normal section. "break" (section-row-break
+	// task0001 FR1) marks a forced row-break entry: every other field on
+	// this yamlSection is ignored. Any other non-empty value is a
+	// validation error.
+	Type string `yaml:"type"`
 }
 
 // Load reads, parses, and validates the config file at path. On
@@ -117,10 +122,15 @@ func Load(path string) (Config, error) {
 // identified by SectionConfig.Key(): downstream components (runner,
 // ui, app) assume key uniqueness, and two sections with an identical
 // key would otherwise silently collide (a leaked widget, a section
-// whose process the runner cannot tell apart from another).
+// whose process the runner cannot tell apart from another). Break
+// entries (section-row-break task0001 FR2, AC-3) are excluded: any
+// number of them is valid, since they never start a process or a widget.
 func checkDuplicateKeys(sections []SectionConfig) error {
 	firstIndex := make(map[string]int, len(sections))
 	for i, sec := range sections {
+		if sec.IsBreak {
+			continue
+		}
 		key := sec.Key()
 		if first, ok := firstIndex[key]; ok {
 			return fmt.Errorf("config: sections %d and %d (name=%q command=%q mode=%q) have identical settings: duplicate section keys are not allowed", first, i, sec.Name, sec.Command, sec.Mode)
@@ -131,8 +141,20 @@ func checkDuplicateKeys(sections []SectionConfig) error {
 }
 
 // buildSection validates one raw YAML section and converts it into
-// a SectionConfig, applying the max_lines default when omitted.
+// a SectionConfig, applying the max_lines default when omitted. A
+// type: break entry (section-row-break task0001 FR1, FR2) short-circuits
+// as a bare break marker before any other field is inspected: the
+// command / mode / interval / max_lines validations below do not apply to
+// it, and none of its other fields carry over. Any type value other than
+// "break" or empty is a validation error naming the offending value.
 func buildSection(rs yamlSection) (SectionConfig, error) {
+	if rs.Type == TypeBreak {
+		return SectionConfig{IsBreak: true}, nil
+	}
+	if rs.Type != "" {
+		return SectionConfig{}, fmt.Errorf("unknown type %q", rs.Type)
+	}
+
 	if rs.Command == "" {
 		return SectionConfig{}, fmt.Errorf("missing command")
 	}

@@ -16,6 +16,11 @@ const (
 	ModeStream   = "stream"
 )
 
+// TypeBreak is the YAML `type` value that marks a section entry as a
+// forced row-break (section-row-break task0001 FR1) rather than a normal
+// section.
+const TypeBreak = "break"
+
 // Defaults applied when the corresponding YAML field is omitted.
 const (
 	DefaultWindowWidth = 400
@@ -40,7 +45,13 @@ type Window struct {
 }
 
 // SectionConfig defines one output section: the command it runs, how
-// it runs (interval | stream), and its display style.
+// it runs (interval | stream), and its display style. An entry with
+// IsBreak true is a forced row-break marker (`- type: break` in YAML,
+// section-row-break task0001 FR1): every other field is zero-valued and
+// meaningless for it. Downstream layers must exclude break entries from
+// duplicate-key validation, runner reconciliation, and rehydration, while
+// preserving their position in Sections so the ui layer can use them to
+// force a row boundary at that point.
 type SectionConfig struct {
 	Name     string
 	Command  string
@@ -48,6 +59,7 @@ type SectionConfig struct {
 	Interval time.Duration
 	MaxLines int
 	Style    map[string]string
+	IsBreak  bool
 }
 
 // Key returns a stable identity for the section derived from Name,

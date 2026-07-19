@@ -270,6 +270,16 @@ sections:
     interval: 1s
 `,
 		},
+		{
+			name: "unknown type",
+			yaml: `
+sections:
+  - type: bogus
+    command: "date"
+    mode: interval
+    interval: 1s
+`,
+		},
 	}
 
 	for _, tt := range tests {
@@ -314,6 +324,112 @@ sections:
 	}
 	if !strings.Contains(err.Error(), "0") || !strings.Contains(err.Error(), "2") {
 		t.Errorf("Load() error = %q, want it to name offending indices 0 and 2", err.Error())
+	}
+}
+
+// --- section-row-break task0001: break entries (TS-1..TS-4) ---
+
+// TestLoad_BreakEntryLoadsSuccessfully references AC-1: a `- type: break`
+// entry between two sections loads successfully, preserving section order,
+// and is marked as a break so downstream layers can recognize and skip it.
+func TestLoad_BreakEntryLoadsSuccessfully(t *testing.T) {
+	path := writeTempConfig(t, `
+sections:
+  - name: clock
+    command: "date"
+    mode: interval
+    interval: 1s
+  - type: break
+  - name: uptime
+    command: "uptime"
+    mode: interval
+    interval: 1s
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v, want nil", err)
+	}
+	if len(cfg.Sections) != 3 {
+		t.Fatalf("len(Sections) = %d, want 3", len(cfg.Sections))
+	}
+	if cfg.Sections[0].IsBreak {
+		t.Errorf("Sections[0].IsBreak = true, want false (clock)")
+	}
+	if !cfg.Sections[1].IsBreak {
+		t.Errorf("Sections[1].IsBreak = false, want true (break entry)")
+	}
+	if cfg.Sections[2].IsBreak {
+		t.Errorf("Sections[2].IsBreak = true, want false (uptime)")
+	}
+	if cfg.Sections[0].Name != "clock" || cfg.Sections[2].Name != "uptime" {
+		t.Errorf("Sections order not preserved around the break: %+v", cfg.Sections)
+	}
+}
+
+// TestLoad_BreakTypeIgnoresOtherFields references AC-2: type: break with
+// other fields present still loads as a break; the other fields are not
+// validated and do not appear on the resulting SectionConfig.
+func TestLoad_BreakTypeIgnoresOtherFields(t *testing.T) {
+	path := writeTempConfig(t, `
+sections:
+  - type: break
+    name: ignored
+    command: "should not matter"
+    mode: bogus-mode
+    interval: "not-a-duration"
+    max_lines: -1
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v, want nil (a break entry skips validation of the other fields)", err)
+	}
+	if len(cfg.Sections) != 1 {
+		t.Fatalf("len(Sections) = %d, want 1", len(cfg.Sections))
+	}
+	if !reflect.DeepEqual(cfg.Sections[0], SectionConfig{IsBreak: true}) {
+		t.Errorf("Sections[0] = %+v, want a bare break marker with all other fields zero-valued", cfg.Sections[0])
+	}
+}
+
+// TestLoad_UnknownTypeFailsValidation references AC-2: type set to any
+// value other than "break" (or omitted) fails validation, naming the
+// offending value.
+func TestLoad_UnknownTypeFailsValidation(t *testing.T) {
+	path := writeTempConfig(t, `
+sections:
+  - type: bogus
+    command: "date"
+    mode: interval
+    interval: 1s
+`)
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("Load() error = nil, want validation error for unknown type")
+	}
+	if !strings.Contains(err.Error(), "bogus") {
+		t.Errorf("Load() error = %q, want it to name the offending type value %q", err.Error(), "bogus")
+	}
+}
+
+// TestLoad_MultipleBreaksNoDuplicateKeyError references AC-3: two or more
+// break entries in one config do not trigger the duplicate-key error.
+func TestLoad_MultipleBreaksNoDuplicateKeyError(t *testing.T) {
+	path := writeTempConfig(t, `
+sections:
+  - type: break
+  - type: break
+  - name: clock
+    command: "date"
+    mode: interval
+    interval: 1s
+  - type: break
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v, want nil (multiple breaks must not trigger the duplicate-key error)", err)
+	}
+	if len(cfg.Sections) != 4 {
+		t.Fatalf("len(Sections) = %d, want 4", len(cfg.Sections))
 	}
 }
 
