@@ -1,0 +1,15 @@
+feature: trailing-newline-strip
+collected_at: "2026-07-19T11:51:10+09:00"
+session_ids: [066d8f6c-4bfb-434d-87c0-ee4389d61c40]
+signals:
+  review_critical_high: []
+  conflict_reworks: []
+  file_prediction_misses: []
+  verification_failures: []
+  discretionary_perspectives: []
+  declined_findings:
+    - stable_id: 06fa26839052b34e
+      category: spec
+      resolution_reason: "FR5 は出力表示の要件でエラー表示は FR3 が規定・充足済み。err.Error() が改行のみになる経路が実際にない。claude:spec はクリーン判定(モデル間不一致)"
+lessons_candidates:
+  - "codex:spec が FR5(空出力)とエラー表示経路の適用範囲解釈で claude:spec と割れた。SPEC で表示系 FR のスコープ(どの表示経路に適用されるか)を明示すると解釈割れを防げそう"

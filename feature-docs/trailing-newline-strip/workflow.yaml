@@ -1,0 +1,119 @@
+schema_version: 1
+feature: trailing-newline-strip
+created: 2026-07-19
+base_branch: main
+parent_branch: em-workflow/trailing-newline-strip/integration
+
+project:
+  license: MIT
+  components:
+    main:
+      language: go
+      build_command: "go build ./..."
+      test_command: "go test ./..."
+      format_command: "gofmt -l -w ."
+      e2e_test_command: ""
+
+workflow:
+  - id: create-spec
+    artifacts: [REQUIREMENTS.md, SPEC.md]
+    status: completed
+    completed_at_commit: 47ccb252736aa31a2637ff39073e7e0e4872b990
+  - id: design
+    artifacts: [DESIGN.md, design/]
+    status: skipped
+    skipped_reason: "デザインは確定済み（process-output-widget の DESIGN.md / mockup 状態 trailing-newline が SSOT）"
+  - id: create-plan
+    artifacts: [IMPLEMENTATION.md, VERIFICATION.md, tasks/]
+    status: completed
+    completed_at_commit: 47ccb252736aa31a2637ff39073e7e0e4872b990
+  - id: implement
+    status: completed
+    completed_at_commit: 0cdf294f592edc5b076dcc99dc59733b2ce642d3
+    base_commit: 47ccb252736aa31a2637ff39073e7e0e4872b990
+  - id: review
+    status: completed
+    completed_at_commit: 0cdf294f592edc5b076dcc99dc59733b2ce642d3
+  - id: verify
+    status: completed
+    completed_at_commit: 0cdf294f592edc5b076dcc99dc59733b2ce642d3
+    result: pass
+    failed_items: []
+    notes: "Automated: build OK (benign gotk4 cgo warnings only), go test ./... all packages pass (TS-1..TS-7 covered by internal/app tests), gofmt clean. No excluded requirements. Manual scenario M-1 (on-device gap vs mockup state trailing-newline) remains for human verification — not automatable per test/README.md."
+  - id: retrospect
+    status: completed
+    completed_at_commit: 0cdf294f592edc5b076dcc99dc59733b2ce642d3
+
+tasks:
+  task0001:
+    title: "Strip trailing newlines at render time"
+    plan: tasks/task0001.md
+    files:
+      - internal/app/events.go
+      - internal/app/app_test.go
+      - internal/app/events_test.go
+    skills: [backend-impl]
+    domains: [ui, input-handling]
+    complexity: low
+    requirements: [FR1, FR2, FR3, FR4, FR5, NFR1, NFR2]
+    status: merged
+    notes: null
+    branch: em-workflow/trailing-newline-strip/task0001
+
+review:
+  status: completed
+  rounds_completed: 1
+  plan:
+    floor: [comprehensive, spec, security]
+    discretionary: []
+    codex_cross_validation: true
+  perspectives:
+    comprehensive: completed
+    spec: completed
+    security: completed
+  residual_critical_high: 0
+  needs_rework: false
+
+requirements:
+  FR1:
+    title: "Interval (replace) output: strip all trailing newlines before rendering"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-1, TS-2]
+  FR2:
+    title: "Stream (append) display: strip trailing newlines from joined display text; buffer unchanged"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-3]
+  FR3:
+    title: "Section error display: strip trailing newlines from message"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-4]
+  FR4:
+    title: "Interior blank lines preserved verbatim"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-5, TS-7]
+  FR5:
+    title: "Newline-only output renders as empty string"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-6]
+  NFR1:
+    title: "No new external dependencies"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: []
+  NFR2:
+    title: "Quality gates: build, test, gofmt clean"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: []
