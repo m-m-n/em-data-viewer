@@ -10,6 +10,7 @@
     --color-on-surface: #e0e0e0;
     --color-on-surface-dim: #9e9e9e;
     --color-frame: #888888;
+    --color-divider: #666666;
     --color-error: #e57373;
     --color-error-surface: #3a2222ee;
     --typography-output: 12pt/1.4 monospace;
@@ -17,6 +18,7 @@
     --spacing-unit: 6px;
     --radius-window: 8px;
     --border-frame-width: 1px;
+    --border-divider-width: 1px;
   }
 
   /* mockup scaffolding (not part of the design) */
@@ -35,7 +37,25 @@
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
-    gap: calc(var(--spacing-unit) * 2);
+    gap: 0; /* rows are separated by divider rules, not spacing */
+  }
+
+  /* a packed row of sections; sections in one row are separated by a
+     floating vertical rule */
+  .row { display: flex; align-items: stretch; }
+  .vdivider {
+    width: var(--border-divider-width);
+    background: var(--color-divider);
+    /* float: 1 unit top/bottom inset (never touches hdivider), 1 unit
+       breathing room left/right */
+    margin: var(--spacing-unit) var(--spacing-unit);
+  }
+  /* floating horizontal rule between rows: zero extra vertical gap,
+     ends inset 1 unit so it never touches the frame or a vdivider */
+  .hdivider {
+    height: var(--border-divider-width);
+    background: var(--color-divider);
+    margin: 0 var(--spacing-unit);
   }
 
   /* config-error banner: full-width, top, no radius on itself */
@@ -44,7 +64,7 @@
     color: var(--color-error);
     font: var(--typography-output);
     padding: var(--spacing-unit) calc(var(--spacing-unit) * 2);
-    margin: calc(var(--spacing-unit) * -2) calc(var(--spacing-unit) * -2) 0;
+    margin: calc(var(--spacing-unit) * -2) calc(var(--spacing-unit) * -2) var(--spacing-unit);
     border-bottom: var(--border-frame-width) solid var(--color-frame);
     border-radius: var(--radius-window) var(--radius-window) 0 0; /* clipped by window corner only */
   }
@@ -81,24 +101,29 @@
 </head>
 <body>
 
-<!-- ── default: multiple sections, interval + stream ── -->
+<!-- ── default: multiple sections packed into rows, divider rules ── -->
 <section data-state="default">
-  <h2>default (interval + stream sections)</h2>
-  <div class="widget">
-    <div class="section">
-      <div class="section-label">clock</div>
-      <pre class="section-output">2026-07-16 14:03:22</pre>
+  <h2>default (packed rows + divider rules)</h2>
+  <div class="widget" style="width: 480px;">
+    <div class="row">
+      <div class="section">
+        <div class="section-label">clock</div>
+        <pre class="section-output">2026-07-16 14:03:22</pre>
+      </div>
+      <div class="vdivider"></div>
+      <div class="section">
+        <div class="section-label">sensors</div>
+        <pre class="section-output">CPU <span style="color:#8bc34a">42°C</span> fan 980 rpm</pre>
+      </div>
     </div>
-    <div class="section">
-      <div class="section-label">sensors</div>
-      <pre class="section-output">CPU  <span style="color:#8bc34a">42°C</span>   fan 980 rpm
-GPU  <span style="color:#ffb74d">61°C</span></pre>
-    </div>
-    <div class="section">
-      <div class="section-label">journal (stream)</div>
-      <pre class="section-output">14:02:58 systemd[1]: Started daily job.
+    <div class="hdivider"></div>
+    <div class="row">
+      <div class="section">
+        <div class="section-label">journal (stream)</div>
+        <pre class="section-output">14:02:58 systemd[1]: Started daily job.
 14:03:01 kernel: usb 1-2: new device
 14:03:15 NetworkManager: connectivity ok</pre>
+      </div>
     </div>
   </div>
 </section>
@@ -125,13 +150,16 @@ GPU  <span style="color:#ffb74d">61°C</span></pre>
 <section data-state="section-error">
   <h2>section-error (one failing command)</h2>
   <div class="widget">
-    <div class="section">
-      <div class="section-label">clock</div>
-      <pre class="section-output">2026-07-16 14:03:22</pre>
-    </div>
-    <div class="section">
-      <div class="section-label">sensors</div>
-      <pre class="section-output"><span class="err">error: command "sensorz" failed: exit status 127</span></pre>
+    <div class="row">
+      <div class="section">
+        <div class="section-label">clock</div>
+        <pre class="section-output">2026-07-16 14:03:22</pre>
+      </div>
+      <div class="vdivider"></div>
+      <div class="section">
+        <div class="section-label">sensors</div>
+        <pre class="section-output"><span class="err">error: command "sensorz" failed: exit status 127</span></pre>
+      </div>
     </div>
   </div>
 </section>
