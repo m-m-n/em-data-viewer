@@ -1,0 +1,39 @@
+round: 1
+executed_at: "2026-07-19T23:35:03+09:00"
+scope:
+  review_mode: diff
+  base_commit: 29bc8c24847b7d3d9b025f5704a1cd62998484e8
+  head_commit: 5cb321988e709f76f0eca45eb695b5045f8350bb
+  changed_files:
+    - .gitignore
+    - Makefile
+    - assets/icon.gresource.xml
+    - internal/ui/resources.go
+    - internal/ui/resources_test.go
+    - internal/ui/ui.go
+plan:
+  floor: [comprehensive, spec]
+  discretionary: []
+  codex_cross_validation: false
+perspective_runs:
+  - {perspective: comprehensive, source: claude, status: completed}
+  - {perspective: spec, source: claude, status: completed}
+findings:
+  - stable_id: 0f02e4e1ea37b81a
+    severity: medium
+    category: comprehensive
+    file: internal/ui/resources_test.go
+    line: 37
+    title: "契約テストが manifest を実際には検証せず、片方向のドリフトを見逃す"
+    description: "TestIconResourceBasePath_MatchesManifestPrefix は assets/icon.gresource.xml も compiled bundle も読まず、const iconResourceBasePath をハードコード文字列と比較しているだけ。XML の prefix を（const を変えずに）変更した場合はテストが通ったまま、runtime の AddResourcePath(const) と bundle 内 prefix が食い違い、アイコンが実行時に無言で解決失敗する。"
+    suggestion: "テストを実際の manifest/bundle に結び付ける: (a) assets/icon.gresource.xml を読んで <gresource prefix=...> を抽出し const と突き合わせる、または (b) parseIconResource() の *gio.Resource に対し既知パス（例: {base}/16x16/apps）の列挙で const が bundle 内 prefix と一致することを検証する。"
+    sources: [claude:comprehensive]
+    confidence: 65
+    resolution: unresolved
+    resolution_reason: "severity medium は auto-fix ゲート（critical/high のみ）の対象外。residual_critical_high には影響しない"
+auto_fix:
+  loops_run: 0
+  applied_total: 0
+  termination: clean
+residual_critical_high: 0
+rework_required: false

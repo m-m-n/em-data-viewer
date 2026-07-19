@@ -1,0 +1,15 @@
+feature: app-icon-embed
+collected_at: "2026-07-19T23:36:48+09:00"
+session_ids: [9ee72fd0-243c-4148-9c74-c7a3d5f4899e]
+signals:
+  review_critical_high: []
+  conflict_reworks: []
+  file_prediction_misses:
+    - task: task0001
+      files: [internal/ui/resources_test.go, internal/ui/ui.go]
+  verification_failures: []
+  discretionary_perspectives: []
+  declined_findings: []
+lessons_candidates:
+  - "go:embed 対象の生成物を持つ feature はビルド/テスト入口を Makefile に統一する判断が有効だった（素の go build がクリーンツリーで通らない制約を create-spec 段階で拾えた）"
+  - "planner の files 予測に「実装ファイルに対応する _test.go」と「wiring 先の既存ファイル」が漏れがち（app-icon task0002 / app-icon-embed task0001 で連続発生）"

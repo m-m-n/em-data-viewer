@@ -28,15 +28,21 @@ workflow:
     status: completed
     completed_at_commit: 29bc8c24847b7d3d9b025f5704a1cd62998484e8
   - id: implement
-    status: pending
+    status: completed
+    completed_at_commit: 5cb321988e709f76f0eca45eb695b5045f8350bb
+    base_commit: 29bc8c24847b7d3d9b025f5704a1cd62998484e8
   - id: review
-    status: pending
+    status: completed
+    completed_at_commit: 5cb321988e709f76f0eca45eb695b5045f8350bb
   - id: verify
-    status: pending
-    result: null
+    status: completed
+    completed_at_commit: 5cb321988e709f76f0eca45eb695b5045f8350bb
+    result: pass
     failed_items: []
+    notes: "TS-1..TS-8 all pass (clean-tree make build/test, resources idempotency, both tool-masking failures, clean git status, 6 gresource entries, dpkg payload structure unchanged). M-1 (icon display without installed theme icons) remains as a manual item."
   - id: retrospect
-    status: pending
+    status: completed
+    completed_at_commit: 5cb321988e709f76f0eca45eb695b5045f8350bb
 
 tasks:
   task0001:
@@ -51,12 +57,22 @@ tasks:
     domains: [config-infra, ui]
     complexity: medium
     requirements: [FR1, FR2, FR3, FR4, NFR1, NFR2]
-    status: pending
+    status: merged
     notes: null
+    branch: em-workflow/app-icon-embed/task0001
 
 review:
-  status: pending
-  rounds_completed: 0
+  status: completed
+  rounds_completed: 1
+  plan:
+    floor: [comprehensive, spec]
+    discretionary: []
+    codex_cross_validation: false
+  perspectives:
+    comprehensive: completed
+    spec: completed
+  residual_critical_high: 0
+  needs_rework: false
 
 requirements:
   FR1:
