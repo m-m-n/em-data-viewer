@@ -3,7 +3,6 @@
 
 window:
   width: 400
-  height: 600
   keep_above: true
   style:
     background: "#1e1e1eee"

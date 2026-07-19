@@ -10,10 +10,10 @@ import (
 func TestHolder_RetainsLastGoodOnFailedReload(t *testing.T) {
 	h := NewHolder()
 
-	good := Config{Window: Window{Width: 400, Height: 600}}
+	good := Config{Window: Window{Width: 400}}
 	h.Update(good, nil)
 
-	if got := h.Config(); got.Window.Width != 400 || got.Window.Height != 600 {
+	if got := h.Config(); got.Window.Width != 400 {
 		t.Fatalf("Config() = %+v, want initial good config", got)
 	}
 	if err := h.Err(); err != nil {
@@ -23,7 +23,7 @@ func TestHolder_RetainsLastGoodOnFailedReload(t *testing.T) {
 	failErr := errors.New("boom")
 	h.Update(Config{}, failErr)
 
-	if got := h.Config(); got.Window.Width != 400 || got.Window.Height != 600 {
+	if got := h.Config(); got.Window.Width != 400 {
 		t.Errorf("Config() after failed reload = %+v, want previous good config retained", got)
 	}
 	if err := h.Err(); err != failErr {
@@ -39,10 +39,10 @@ func TestHolder_SuccessfulReloadReplacesConfigAndClearsError(t *testing.T) {
 		t.Fatal("Err() = nil, want initial failure recorded")
 	}
 
-	newGood := Config{Window: Window{Width: 999, Height: 111}}
+	newGood := Config{Window: Window{Width: 999}}
 	h.Update(newGood, nil)
 
-	if got := h.Config(); got.Window.Width != 999 || got.Window.Height != 111 {
+	if got := h.Config(); got.Window.Width != 999 {
 		t.Errorf("Config() = %+v, want new good config %+v", got, newGood)
 	}
 	if err := h.Err(); err != nil {

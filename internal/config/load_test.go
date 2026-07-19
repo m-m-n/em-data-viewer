@@ -33,8 +33,8 @@ sections:
 		if err != nil {
 			t.Fatalf("Load() error = %v, want nil", err)
 		}
-		if cfg.Window.Width != DefaultWindowWidth || cfg.Window.Height != DefaultWindowHeight {
-			t.Errorf("Window = %+v, want defaults %dx%d", cfg.Window, DefaultWindowWidth, DefaultWindowHeight)
+		if cfg.Window.Width != DefaultWindowWidth {
+			t.Errorf("Window.Width = %d, want default %d", cfg.Window.Width, DefaultWindowWidth)
 		}
 		if len(cfg.Sections) != 1 {
 			t.Fatalf("len(Sections) = %d, want 1", len(cfg.Sections))
@@ -51,11 +51,10 @@ sections:
 		}
 	})
 
-	t.Run("explicit window and max_lines override defaults", func(t *testing.T) {
+	t.Run("explicit window width and max_lines override defaults", func(t *testing.T) {
 		path := writeTempConfig(t, `
 window:
   width: 800
-  height: 200
 sections:
   - command: "tail -f /tmp/foo"
     mode: stream
@@ -65,11 +64,31 @@ sections:
 		if err != nil {
 			t.Fatalf("Load() error = %v, want nil", err)
 		}
-		if cfg.Window.Width != 800 || cfg.Window.Height != 200 {
-			t.Errorf("Window = %+v, want 800x200", cfg.Window)
+		if cfg.Window.Width != 800 {
+			t.Errorf("Window.Width = %d, want 800", cfg.Window.Width)
 		}
 		if cfg.Sections[0].MaxLines != 50 {
 			t.Errorf("MaxLines = %d, want 50", cfg.Sections[0].MaxLines)
+		}
+	})
+
+	// TestLoad_ValidConfigAppliesDefaults/window.height_key_is_silently_ignored
+	// references AC-1: a `window.height` key in YAML loads with no error and
+	// has no effect on the loaded config (the field no longer exists on
+	// Window, so there is nothing it could set).
+	t.Run("window.height key is silently ignored", func(t *testing.T) {
+		path := writeTempConfig(t, `
+window:
+  width: 800
+  height: 999
+sections: []
+`)
+		cfg, err := Load(path)
+		if err != nil {
+			t.Fatalf("Load() error = %v, want nil (a window.height key must not cause an error)", err)
+		}
+		if cfg.Window.Width != 800 {
+			t.Errorf("Window.Width = %d, want 800 (an unrelated window.height key must not affect other fields)", cfg.Window.Width)
 		}
 	})
 

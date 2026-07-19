@@ -46,9 +46,12 @@ type yamlConfig struct {
 	Sections []yamlSection `yaml:"sections"`
 }
 
+// yamlWindow deliberately has no Height field (task0001): the window's
+// height is derived from content at runtime, not configured. Because YAML
+// decoding is non-strict, a `height` key present in a user's file is
+// silently ignored -- no error, no warning.
 type yamlWindow struct {
 	Width     *int              `yaml:"width"`
-	Height    *int              `yaml:"height"`
 	Style     map[string]string `yaml:"style"`
 	KeepAbove *bool             `yaml:"keep_above"`
 }
@@ -63,12 +66,12 @@ type yamlSection struct {
 }
 
 // Load reads, parses, and validates the config file at path. On
-// success it returns a Config with defaults applied (window
-// 400x600, max_lines 100, keep_above true where omitted). On
-// failure — unreadable file, malformed YAML, or a validation
-// failure — it returns a zero Config and a descriptive error.
-// Callers must not treat a failed Load's zero Config as a valid
-// config; see Holder for last-good retention across failed reloads.
+// success it returns a Config with defaults applied (window width
+// 400, max_lines 100, keep_above true where omitted). On failure —
+// unreadable file, malformed YAML, or a validation failure — it
+// returns a zero Config and a descriptive error. Callers must not
+// treat a failed Load's zero Config as a valid config; see Holder
+// for last-good retention across failed reloads.
 func Load(path string) (Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -83,16 +86,12 @@ func Load(path string) (Config, error) {
 	cfg := Config{
 		Window: Window{
 			Width:     DefaultWindowWidth,
-			Height:    DefaultWindowHeight,
 			Style:     raw.Window.Style,
 			KeepAbove: DefaultKeepAbove,
 		},
 	}
 	if raw.Window.Width != nil {
 		cfg.Window.Width = *raw.Window.Width
-	}
-	if raw.Window.Height != nil {
-		cfg.Window.Height = *raw.Window.Height
 	}
 	if raw.Window.KeepAbove != nil {
 		cfg.Window.KeepAbove = *raw.Window.KeepAbove

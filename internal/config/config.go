@@ -18,10 +18,9 @@ const (
 
 // Defaults applied when the corresponding YAML field is omitted.
 const (
-	DefaultWindowWidth  = 400
-	DefaultWindowHeight = 600
-	DefaultMaxLines     = 100
-	DefaultKeepAbove    = true
+	DefaultWindowWidth = 400
+	DefaultMaxLines    = 100
+	DefaultKeepAbove   = true
 )
 
 // Config is the parsed and validated application configuration.
@@ -31,11 +30,11 @@ type Config struct {
 	Sections []SectionConfig
 }
 
-// Window holds the widget window's size, style, and keep-above
-// settings.
+// Window holds the widget window's width, style, and keep-above
+// settings. Height is not configurable (task0001): the window's height
+// is derived from its content at runtime by the ui layer.
 type Window struct {
 	Width     int
-	Height    int
 	Style     map[string]string
 	KeepAbove bool
 }
