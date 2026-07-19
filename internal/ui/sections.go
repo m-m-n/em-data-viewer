@@ -10,11 +10,15 @@ import (
 // layer from config.SectionConfig (the ui package stays decoupled from the
 // config package). Key is the stable identity from SectionConfig.Key();
 // display order is the order of the slice passed to SetSections — Key is
-// identity, not order.
+// identity, not order. IsBreak marks a forced row-break entry
+// (section-row-break task0001 FR2, FR4): when true, Key/Label/Style are
+// zero-valued and unused — no widget or style entry is created for it, but
+// its position in the slice still forces a row boundary there.
 type SectionViewModel struct {
-	Key   string
-	Label string
-	Style map[string]string
+	Key     string
+	Label   string
+	Style   map[string]string
+	IsBreak bool
 }
 
 // sectionWidgets holds the live widgets and merged style for one section.
@@ -46,6 +50,12 @@ type sectionsView struct {
 	byKey  map[string]*sectionWidgets
 	nextID int
 
+	// breaks holds the forced-break split points recorded by setSections
+	// (section-row-break task0001 FR4), each a position in [0, len(order)]
+	// relative to the real (non-break) sections in order — the same
+	// coordinate space packRowsWithBreaks expects.
+	breaks []int
+
 	// lastAssignment is the row assignment actually rendered as rows, kept
 	// to skip rebuilding row widgets when reflow recomputes the same
 	// layout (FR4, AC-5).
@@ -62,7 +72,10 @@ func newSectionsView() *sectionsView {
 }
 
 // setSections replaces the displayed sections with sections, in the given
-// order (AC-4), and reflows them into rows (FR4).
+// order (AC-4), and reflows them into rows (FR4). A break entry
+// (section-row-break task0001 FR4) creates no widget, no style entry, and
+// no order entry; instead its position is recorded in sv.breaks, relative
+// to the real sections seen so far, for reflow's row assignment to use.
 func (sv *sectionsView) setSections(sections []SectionViewModel) {
 	for _, child := range sv.rowChildren {
 		sv.widget.Remove(child)
@@ -73,8 +86,13 @@ func (sv *sectionsView) setSections(sections []SectionViewModel) {
 
 	sv.order = sv.order[:0]
 	sv.byKey = make(map[string]*sectionWidgets, len(sections))
+	sv.breaks = sv.breaks[:0]
 
 	for _, s := range sections {
+		if s.IsBreak {
+			sv.breaks = append(sv.breaks, len(sv.order))
+			continue
+		}
 		sv.nextID++
 		class := fmt.Sprintf("dv-section-%d", sv.nextID)
 
@@ -145,10 +163,13 @@ func (sv *sectionsView) styleEntries() []sectionStyleEntry {
 // reflow recomputes the row assignment from every section root's natural
 // horizontal width (for_size unconstrained) and the container's currently
 // allocated width, then rebuilds the row widgets only when the assignment
-// actually changed (FR3, FR4, AC-5). Safe to call with zero sections, and
+// actually changed (FR3, FR4, AC-5). sv.breaks (section-row-break task0001
+// FR4) splits the widths into independently packed segments before the
+// usual greedy width packing runs on each; empty otherwise, which makes
+// this identical to plain packRows. Safe to call with zero sections, and
 // before the window has ever been allocated a width (AllocatedWidth is then
-// 0, so packRows degrades to one section per row until a later reflow —
-// e.g. the window's map signal — corrects it).
+// 0, so width-based packing degrades to one section per row until a later
+// reflow — e.g. the window's map signal — corrects it).
 func (sv *sectionsView) reflow() {
 	widths := make([]int, len(sv.order))
 	for i, key := range sv.order {
@@ -156,7 +177,7 @@ func (sv *sectionsView) reflow() {
 		widths[i] = natural
 	}
 
-	assignment := packRows(widths, sectionColumnGap, sv.widget.AllocatedWidth())
+	assignment := packRowsWithBreaks(widths, sv.breaks, sectionColumnGap, sv.widget.AllocatedWidth())
 	if assignmentsEqual(assignment, sv.lastAssignment) {
 		return
 	}
@@ -279,6 +300,44 @@ func packRows(widths []int, gap, avail int) [][]int {
 	rows = append(rows, row)
 
 	return rows
+}
+
+// packRowsWithBreaks packs widths into rows exactly like packRows, except
+// forced row breaks (section-row-break task0001 FR4, FR5) split widths into
+// independently packed segments first: breaks holds the sorted split
+// points, each a position in [0, len(widths)] marking where the current
+// row must end regardless of remaining width. Every segment is packed on
+// its own with packRows and the resulting rows are concatenated in order,
+// with indices translated back into the original widths slice; a natural
+// wrap within a segment behaves exactly as packRows alone would (AC-5). A
+// split point at 0 or len(widths), or two adjacent split points, yields an
+// empty segment and contributes no rows (AC-6). Equivalent to
+// packRows(widths, gap, avail) when breaks is empty (AC-7).
+func packRowsWithBreaks(widths []int, breaks []int, gap, avail int) [][]int {
+	var out [][]int
+	start := 0
+
+	appendSegment := func(end int) {
+		if end <= start {
+			start = end
+			return
+		}
+		for _, row := range packRows(widths[start:end], gap, avail) {
+			translated := make([]int, len(row))
+			for i, idx := range row {
+				translated[i] = idx + start
+			}
+			out = append(out, translated)
+		}
+		start = end
+	}
+
+	for _, b := range breaks {
+		appendSegment(b)
+	}
+	appendSegment(len(widths))
+
+	return out
 }
 
 // assignmentsEqual reports whether two row assignments are identical: same
