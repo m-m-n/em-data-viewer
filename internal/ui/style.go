@@ -59,7 +59,7 @@ var SectionStyleDefaults = map[string]string{
 	"label-size":   "9pt",
 	"output-color": "#e0e0e0",
 	"output-font":  "monospace",
-	"output-size":  "12pt",
+	"output-size":  "11pt",
 }
 
 // specKeyAliases maps SPEC Config Schema style keys (the public contract

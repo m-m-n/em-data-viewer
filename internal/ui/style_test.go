@@ -470,6 +470,57 @@ func TestParseFontDescription_SplitsFamilyAndSize(t *testing.T) {
 	}
 }
 
+// --- Default output text size 11pt (task0001) ---
+
+// TestSectionCSS_DefaultAndOverrideOutputSize references AC-1/AC-2/AC-3: with
+// no overrides the generated section CSS uses 11pt for output text and 9pt
+// for labels, and a user font override still wins over the 11pt default.
+func TestSectionCSS_DefaultAndOverrideOutputSize(t *testing.T) {
+	cases := []struct {
+		name           string
+		overrides      map[string]string
+		wantOutputSize string
+		wantLabelSize  string
+	}{
+		{
+			name:           "no overrides uses 11pt output default and 9pt label default",
+			overrides:      nil,
+			wantOutputSize: "11pt",
+			wantLabelSize:  "9pt",
+		},
+		{
+			name:           "user font override size 12 wins over the 11pt default",
+			overrides:      map[string]string{"font": "monospace 12"},
+			wantOutputSize: "12pt",
+			wantLabelSize:  "9pt",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			style := MergeStyle(SectionStyleDefaults, tc.overrides)
+			css := sectionCSS("dv-section-1", style)
+
+			labelStart := strings.Index(css, ".dv-section-1.dv-section-label {")
+			outputStart := strings.Index(css, ".dv-section-1.dv-output {")
+			if labelStart == -1 || outputStart == -1 {
+				t.Fatalf("sectionCSS() missing expected scoped rules: %q", css)
+			}
+			labelBlock := css[labelStart:outputStart]
+			outputBlock := css[outputStart:]
+
+			wantLabel := fmt.Sprintf("font-size: %s;", tc.wantLabelSize)
+			if !strings.Contains(labelBlock, wantLabel) {
+				t.Errorf("sectionCSS() label rule = %q, want it to contain %q", labelBlock, wantLabel)
+			}
+			wantOutput := fmt.Sprintf("font-size: %s;", tc.wantOutputSize)
+			if !strings.Contains(outputBlock, wantOutput) {
+				t.Errorf("sectionCSS() output rule = %q, want it to contain %q", outputBlock, wantOutput)
+			}
+		})
+	}
+}
+
 // --- Drift guard (AC-5): defaults table vs design-system/tokens.yaml ---
 
 type tokenEntry struct {

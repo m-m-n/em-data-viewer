@@ -27,7 +27,7 @@ color:
 
 typography:
   output:
-    value: { family: "monospace", size: "12pt", line-height: "1.4" }
+    value: { family: "monospace", size: "11pt", line-height: "1.4" }
     description: "コマンド出力の基準。桁揃えが崩れないよう等幅のみ。ユーザーが config の style.font で上書きするデフォルト値"
   section-label:
     value: { family: "sans-serif", size: "9pt", line-height: "1.2" }
