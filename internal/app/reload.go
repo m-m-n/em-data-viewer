@@ -94,9 +94,8 @@ func applyConfig(cfg config.Config, err error, r Runner, store *sectionStore, ge
 	sections := sectionViewModels(cfg.Sections)
 	rehydrations := rehydrationsFor(cfg.Sections, store)
 	window := ui.WindowSettings{
-		Width:  cfg.Window.Width,
-		Height: cfg.Window.Height,
-		Style:  cfg.Window.Style,
+		Width: cfg.Window.Width,
+		Style: cfg.Window.Style,
 	}
 
 	dispatch(func() {

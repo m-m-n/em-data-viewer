@@ -118,7 +118,7 @@ func TestResolveConfigPath(t *testing.T) {
 
 func sampleConfig() config.Config {
 	return config.Config{
-		Window: config.Window{Width: 800, Height: 200, Style: map[string]string{"background": "#000"}},
+		Window: config.Window{Width: 800, Style: map[string]string{"background": "#000"}},
 		Sections: []config.SectionConfig{
 			{Name: "clock", Command: "date", Mode: config.ModeInterval, Interval: 5 * time.Second, MaxLines: 100},
 			{Name: "", Command: "tail -f /tmp/x", Mode: config.ModeStream, MaxLines: 50},
@@ -145,7 +145,7 @@ func TestApplyConfig_SuccessAppliesWindowSectionsAndRunner(t *testing.T) {
 	if len(u.windowSettings) != 1 {
 		t.Fatalf("windowSettings calls = %d, want 1", len(u.windowSettings))
 	}
-	wantWindow := ui.WindowSettings{Width: 800, Height: 200, Style: cfg.Window.Style}
+	wantWindow := ui.WindowSettings{Width: 800, Style: cfg.Window.Style}
 	if !reflect.DeepEqual(u.windowSettings[0], wantWindow) {
 		t.Errorf("ApplyWindow got %+v, want %+v", u.windowSettings[0], wantWindow)
 	}
@@ -510,8 +510,8 @@ func TestApplyConfig_StaleGenerationDoesNotOverwriteNewer(t *testing.T) {
 	store := newSectionStore()
 	gens := newGenerationTracker()
 
-	oldCfg := config.Config{Window: config.Window{Width: 100, Height: 100}}
-	newCfg := config.Config{Window: config.Window{Width: 999, Height: 999}}
+	oldCfg := config.Config{Window: config.Window{Width: 100}}
+	newCfg := config.Config{Window: config.Window{Width: 999}}
 
 	oldGen := gens.next()
 	newGen := gens.next()
