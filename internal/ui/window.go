@@ -27,6 +27,14 @@ type frame struct {
 
 	windowStyle map[string]string
 
+	// settingsWidth is the configured window.width (0 until the first
+	// applySettings). refit re-asserts it on every resize instead of
+	// reading the width back from the window: on Wayland the map-time
+	// configure overwrites the default size with the content's natural
+	// size, so a width read back from GTK can silently lose the
+	// configured value.
+	settingsWidth int
+
 	keepAboveBackend keepAboveBackend
 	keepAboveEnabled bool
 	keepAboveMenu    *keepAboveMenu
@@ -237,6 +245,7 @@ func (f *frame) toplevelSurface() gdk.Surfacer {
 // (e.g. a font-size change), so this also re-fits the window height.
 func (f *frame) applySettings(settings WindowSettings) {
 	if settings.Width > 0 {
+		f.settingsWidth = settings.Width
 		f.win.SetDefaultSize(settings.Width, -1)
 	}
 	f.windowStyle = MergeStyle(WindowStyleDefaults, settings.Style)
@@ -262,8 +271,9 @@ func (f *frame) reflowAndRefit() {
 // refit resizes the window's height to fit the root box's current natural
 // content height (banner + sections) plus the window's own CSS chrome
 // (windowChromeHeight), capped at the monitor height once the window is
-// realized (task0001 Design: "Shrink requirement", "Monitor cap"). Width is
-// left untouched. The minimum frame height (NFR2) is additionally enforced
+// realized (task0001 Design: "Shrink requirement", "Monitor cap"). The
+// width is re-asserted from the configured value (settingsWidth) at the
+// same time. The minimum frame height (NFR2) is additionally enforced
 // as a hard floor by win.SetSizeRequest in newFrame; clamping to it here
 // too keeps the computed default size consistent with that floor.
 //
@@ -273,11 +283,24 @@ func (f *frame) reflowAndRefit() {
 // propagation task0002 removes so the monitor cap can hold). With that
 // override gone, refit's own target must be accurate on its own.
 func (f *frame) refit() {
-	_, natural, _, _ := f.root.Measure(gtk.OrientationVertical, f.root.AllocatedWidth())
+	contentWidth := f.root.AllocatedWidth()
+	if contentWidth <= 0 {
+		// Pre-map there is no allocation yet: measuring height-for-width at
+		// 0 makes GTK warn and yields nothing usable. The map signal's
+		// deferred reflowAndRefit re-runs this once a real width exists.
+		return
+	}
+	_, natural, _, _ := f.root.Measure(gtk.OrientationVertical, contentWidth)
 	target := natural + f.windowChromeHeight()
 	height := fitHeight(target, minFrameHeight, f.monitorHeight())
 
-	width, _ := f.win.DefaultSize()
+	// Re-assert the configured width rather than reading it back from the
+	// window (see settingsWidth). Before the first applySettings there is
+	// no configured width yet; keep whatever the window currently has.
+	width := f.settingsWidth
+	if width <= 0 {
+		width, _ = f.win.DefaultSize()
+	}
 	f.win.SetDefaultSize(width, height)
 }
 

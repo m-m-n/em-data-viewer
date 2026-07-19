@@ -11,7 +11,7 @@ all: build
 
 build:
 	mkdir -p $(BUILD_DIR)
-	go build -trimpath -ldflags="-s -w" -o $(BUILD_DIR)/$(APP_NAME) ./cmd/$(APP_NAME)
+	CC=clang go build -trimpath -ldflags="-s -w" -o $(BUILD_DIR)/$(APP_NAME) ./cmd/$(APP_NAME)
 
 dpkg: build
 	rm -rf $(PKG_ROOT)
