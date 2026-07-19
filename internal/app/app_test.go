@@ -624,7 +624,9 @@ func TestReload_FailedLoadSetsBannerFromHolderError(t *testing.T) {
 func TestTranslateEvent(t *testing.T) {
 	snapshot := func(key string) []string {
 		return map[string][]string{
-			"stream-key": {"line one", "line two"},
+			"stream-key":              {"line one", "line two"},
+			"stream-trailing-blanks":  {"line one", "line two", ""},
+			"stream-only-blank-lines": {"", "", ""},
 		}[key]
 	}
 
@@ -663,6 +665,69 @@ func TestTranslateEvent(t *testing.T) {
 			wantText:   "command not found",
 			wantErrror: true,
 		},
+		// --- AC-1: single trailing newline stripped (replace) ---
+		{
+			name:       "AC-1: replace with a single trailing newline is stripped",
+			event:      runner.Event{SectionKey: "clock-key", Kind: runner.KindReplace, Text: "12:00\n"},
+			wantKey:    "clock-key",
+			wantText:   "12:00",
+			wantErrror: false,
+		},
+		// --- AC-2: multiple trailing newlines all stripped (replace) ---
+		{
+			name:       "AC-2: replace with multiple trailing newlines has all of them stripped",
+			event:      runner.Event{SectionKey: "clock-key", Kind: runner.KindReplace, Text: "12:00\n\n\n"},
+			wantKey:    "clock-key",
+			wantText:   "12:00",
+			wantErrror: false,
+		},
+		// --- AC-3: append snapshot with trailing empty lines strips the join ---
+		{
+			name:       "AC-3: append snapshot ending in empty lines renders with no trailing newlines",
+			event:      runner.Event{SectionKey: "stream-trailing-blanks", Kind: runner.KindAppend, Text: ""},
+			wantKey:    "stream-trailing-blanks",
+			wantText:   "line one\nline two",
+			wantErrror: false,
+		},
+		{
+			name:       "AC-3/AC-6: append snapshot of only empty lines renders as the empty string",
+			event:      runner.Event{SectionKey: "stream-only-blank-lines", Kind: runner.KindAppend, Text: ""},
+			wantKey:    "stream-only-blank-lines",
+			wantText:   "",
+			wantErrror: false,
+		},
+		// --- AC-4: error message's trailing newline stripped before the UI's "error: " prefix ---
+		{
+			name:       "AC-4: error message with a trailing newline is stripped",
+			event:      runner.Event{SectionKey: "clock-key", Kind: runner.KindError, Text: "command not found\n"},
+			wantKey:    "clock-key",
+			wantText:   "command not found",
+			wantErrror: true,
+		},
+		// --- AC-5: interior blank line preserved, only trailing newlines removed ---
+		{
+			name:       "AC-5: interior blank line is kept, only the trailing newline is stripped",
+			event:      runner.Event{SectionKey: "clock-key", Kind: runner.KindReplace, Text: "line1\n\nline2\n"},
+			wantKey:    "clock-key",
+			wantText:   "line1\n\nline2",
+			wantErrror: false,
+		},
+		// --- AC-6: text of only newlines becomes the empty string ---
+		{
+			name:       "AC-6: replace text consisting only of newlines becomes the empty string",
+			event:      runner.Event{SectionKey: "clock-key", Kind: runner.KindReplace, Text: "\n\n\n"},
+			wantKey:    "clock-key",
+			wantText:   "",
+			wantErrror: false,
+		},
+		// --- AC-7: trailing CRLF fully removed; interior CR untouched ---
+		{
+			name:       "AC-7: trailing carriage-return + newline pair is fully removed, interior CR untouched",
+			event:      runner.Event{SectionKey: "clock-key", Kind: runner.KindReplace, Text: "abc\rdef\r\n"},
+			wantKey:    "clock-key",
+			wantText:   "abc\rdef",
+			wantErrror: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -678,6 +743,24 @@ func TestTranslateEvent(t *testing.T) {
 				t.Errorf("isError = %v, want %v", isError, tt.wantErrror)
 			}
 		})
+	}
+}
+
+// TestTranslateEvent_AppendDoesNotMutateSnapshotSource references AC-3's
+// second half: stripping trailing newlines from the joined display text
+// must not mutate the buffer's stored lines returned by snapshot.
+func TestTranslateEvent_AppendDoesNotMutateSnapshotSource(t *testing.T) {
+	source := []string{"line one", "line two", ""}
+	original := append([]string(nil), source...)
+	snapshot := func(key string) []string { return source }
+
+	_, text, _ := translateEvent(runner.Event{SectionKey: "s", Kind: runner.KindAppend, Text: "line two"}, snapshot)
+
+	if text != "line one\nline two" {
+		t.Errorf("text = %q, want %q", text, "line one\nline two")
+	}
+	if !reflect.DeepEqual(source, original) {
+		t.Errorf("snapshot source mutated: got %v, want unchanged %v", source, original)
 	}
 }
 

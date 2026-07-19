@@ -14,7 +14,11 @@ import (
 // stream section's current buffered lines for append events — the UI
 // always receives a section's full current content, joined as lines,
 // matching UpdateSection's "replace this section's displayed content"
-// contract.
+// contract. All three kinds have trailing newlines stripped from the final
+// display text before it reaches the UI (FR1/FR2/FR3): replace and append
+// are stripped before markup validation/rendering, so markup handling is
+// unaffected; the error message is stripped before the UI layer applies its
+// "error: " prefix.
 //
 // Called only from inside consumeEvents' dispatched callback (Rework
 // Round 1: render at dispatch time, AC-3) — never at receive time — so a
@@ -23,13 +27,35 @@ import (
 func translateEvent(ev runner.Event, snapshot func(key string) []string) (key, text string, isError bool) {
 	switch ev.Kind {
 	case runner.KindError:
-		return ev.SectionKey, ev.Text, true
+		return ev.SectionKey, stripTrailingNewlines(ev.Text), true
 	case runner.KindAppend:
-		rendered, _ := markup.Render(strings.Join(snapshot(ev.SectionKey), "\n"))
+		joined := stripTrailingNewlines(strings.Join(snapshot(ev.SectionKey), "\n"))
+		rendered, _ := markup.Render(joined)
 		return ev.SectionKey, rendered, false
 	default: // runner.KindReplace
-		rendered, _ := markup.Render(ev.Text)
+		rendered, _ := markup.Render(stripTrailingNewlines(ev.Text))
 		return ev.SectionKey, rendered, false
+	}
+}
+
+// stripTrailingNewlines removes newline characters from the end of text
+// (FR1/FR2/FR3/FR4/FR5): a trailing "\n" is removed, and a "\r"
+// immediately preceding a removed "\n" is removed along with it (SPEC Edge
+// case 1). Interior newlines — including interior blank lines — and any
+// carriage return not immediately followed by a removed newline are left
+// byte-for-byte unchanged. Text made up only of newlines becomes the empty
+// string.
+func stripTrailingNewlines(text string) string {
+	for {
+		if strings.HasSuffix(text, "\r\n") {
+			text = text[:len(text)-2]
+			continue
+		}
+		if strings.HasSuffix(text, "\n") {
+			text = text[:len(text)-1]
+			continue
+		}
+		return text
 	}
 }
 
