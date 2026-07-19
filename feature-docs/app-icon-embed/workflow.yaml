@@ -1,0 +1,97 @@
+schema_version: 1
+feature: app-icon-embed
+created: 2026-07-19
+base_branch: main
+parent_branch: em-workflow/app-icon-embed/integration
+
+project:
+  license: MIT
+  components:
+    main:
+      language: go
+      build_command: "make build"
+      test_command: "make test"
+      format_command: "gofmt -l -w ."
+      e2e_test_command: "make dpkg"
+
+workflow:
+  - id: create-spec
+    artifacts: [REQUIREMENTS.md, SPEC.md]
+    status: completed
+    completed_at_commit: 29bc8c24847b7d3d9b025f5704a1cd62998484e8
+  - id: design
+    artifacts: [DESIGN.md, design/]
+    status: skipped
+    skipped_reason: "新しい見た目はない（既存アイコン app-icon の配信経路をバイナリ埋め込みに拡張するだけで、ビジュアル決定は app-icon の DESIGN.md を再利用する）"
+  - id: create-plan
+    artifacts: [IMPLEMENTATION.md, VERIFICATION.md, tasks/]
+    status: completed
+    completed_at_commit: 29bc8c24847b7d3d9b025f5704a1cd62998484e8
+  - id: implement
+    status: pending
+  - id: review
+    status: pending
+  - id: verify
+    status: pending
+    result: null
+    failed_items: []
+  - id: retrospect
+    status: pending
+
+tasks:
+  task0001:
+    title: "GResource icon embedding end-to-end"
+    plan: tasks/task0001.md
+    files:
+      - assets/icon.gresource.xml
+      - internal/ui/resources.go
+      - Makefile
+      - .gitignore
+    skills: [infra-impl]
+    domains: [config-infra, ui]
+    complexity: medium
+    requirements: [FR1, FR2, FR3, FR4, NFR1, NFR2]
+    status: pending
+    notes: null
+
+review:
+  status: pending
+  rounds_completed: 0
+
+requirements:
+  FR1:
+    title: "Makefile resources target generates internal/ui/icon.gresource"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-1, TS-3, TS-4, TS-5, TS-7]
+  FR2:
+    title: "make build / make test depend on resources; workflow commands move to make"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-1, TS-2]
+  FR3:
+    title: "Runtime embeds and registers the gresource on the icon theme path"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-2, M-1]
+  FR4:
+    title: "internal/ui/icon.gresource is git-ignored"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-6]
+  NFR1:
+    title: "No binaries in git"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-6]
+  NFR2:
+    title: "deb packaging output structure unchanged"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-8]
