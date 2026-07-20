@@ -23,11 +23,12 @@ type startupGate struct {
 	ready   func()
 	timeout time.Duration
 
-	mu      sync.Mutex
-	started bool // true once arm or fireNow has run for the first time
-	fired   bool // true once ready has been invoked (or is in the process of being)
-	owed    map[string]struct{}
-	timer   *time.Timer
+	mu       sync.Mutex
+	started  bool // true once arm or fireNow has run for the first time
+	fired    bool // true once ready has been invoked (or is in the process of being)
+	owed     map[string]struct{}
+	received map[string]struct{} // keys marked received before arm has run (task0003 Fix 1)
+	timer    *time.Timer
 }
 
 // newStartupGate returns a gate that invokes ready exactly once. timeout is
@@ -35,9 +36,10 @@ type startupGate struct {
 // firing on its own (FR3); production wiring passes startupReadyTimeout.
 func newStartupGate(ready func(), timeout time.Duration) *startupGate {
 	return &startupGate{
-		ready:   ready,
-		timeout: timeout,
-		owed:    make(map[string]struct{}),
+		ready:    ready,
+		timeout:  timeout,
+		owed:     make(map[string]struct{}),
+		received: make(map[string]struct{}),
 	}
 }
 
@@ -46,9 +48,14 @@ func newStartupGate(ready func(), timeout time.Duration) *startupGate {
 // or fireNow across the gate's lifetime has any effect (Design: "Arming is
 // one-shot too"; IMPLEMENTATION.md decision 4: the gate applies to the
 // first presentation only) -- every later call, including from a
-// subsequent successful reload, is a no-op (AC-6). Arming with an empty key
-// set fires the ready callback immediately (AC-5, FR4) instead of starting
-// a timeout that would fire anyway.
+// subsequent successful reload, is a no-op (AC-6). A key already recorded
+// by a markReceived call that arrived before this arm call (task0003 Fix
+// 1: the event source can start before the gate is armed) is reconciled
+// out here instead of being added to owed, so arming with exactly that key
+// set fires immediately and arming with that key plus others leaves only
+// the others owed (AC-1). Arming with an empty owed set after reconciling
+// fires the ready callback immediately (AC-5, FR4) instead of starting a
+// timeout that would fire anyway.
 func (g *startupGate) arm(keys []string) {
 	g.mu.Lock()
 	if g.started {
@@ -57,8 +64,12 @@ func (g *startupGate) arm(keys []string) {
 	}
 	g.started = true
 	for _, k := range keys {
+		if _, already := g.received[k]; already {
+			continue
+		}
 		g.owed[k] = struct{}{}
 	}
+	g.received = nil // reconciliation done; no longer needed
 	empty := len(g.owed) == 0
 	if !empty {
 		g.timer = time.AfterFunc(g.timeout, g.fire)
@@ -90,8 +101,19 @@ func (g *startupGate) fireNow() {
 // error events alike (FR2, AC-2, AC-3); an unknown or already-received key
 // is ignored. Fires the ready callback the moment this empties the owed set
 // (AC-1).
+//
+// A call arriving before arm has ever run (task0003 Fix 1: in production
+// the event source can start emitting before the gate is armed) is
+// buffered in received instead of being discarded: it never touches owed
+// and never fires the callback itself (AC-2) -- arm reconciles it against
+// the key set it is called with once it runs.
 func (g *startupGate) markReceived(key string) {
 	g.mu.Lock()
+	if !g.started {
+		g.received[key] = struct{}{}
+		g.mu.Unlock()
+		return
+	}
 	if _, ok := g.owed[key]; !ok {
 		g.mu.Unlock()
 		return

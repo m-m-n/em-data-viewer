@@ -46,6 +46,99 @@ func TestStartupGate_MarkReceivedIgnoresUnknownKey(t *testing.T) {
 	}
 }
 
+// --- task0003 Fix 1: event-before-arm ordering (AC-1, AC-2) ---
+
+// TestStartupGate_KeyMarkedReceivedBeforeArm_ArmingWithExactlyThatKeyFiresImmediately
+// references AC-1: in production the event source (runner) can start
+// before the gate is armed (reload.go calls r.Apply before gate.arm), so a
+// fast section's first event can arrive first. That receipt must still
+// count once arm runs.
+func TestStartupGate_KeyMarkedReceivedBeforeArm_ArmingWithExactlyThatKeyFiresImmediately(t *testing.T) {
+	var readyCalls int
+	// A long timeout proves the fire came from reconciling the pre-arm
+	// receipt, not a timeout race.
+	g := newStartupGate(func() { readyCalls++ }, time.Hour)
+
+	g.markReceived("a") // arrives before arm
+
+	if readyCalls != 0 {
+		t.Fatalf("ready calls = %d after a pre-arm markReceived alone, want 0 (AC-2: it must not fire by itself)", readyCalls)
+	}
+
+	g.arm([]string{"a"})
+
+	if readyCalls != 1 {
+		t.Fatalf("ready calls = %d after arming with exactly the pre-arm-received key, want 1", readyCalls)
+	}
+}
+
+// TestStartupGate_KeyMarkedReceivedBeforeArm_ArmingWithOthersLeavesOnlyOthersOwed
+// references AC-1's second clause: arming with the pre-arm-received key
+// plus others leaves only the others owed.
+func TestStartupGate_KeyMarkedReceivedBeforeArm_ArmingWithOthersLeavesOnlyOthersOwed(t *testing.T) {
+	var readyCalls int
+	g := newStartupGate(func() { readyCalls++ }, time.Hour)
+
+	g.markReceived("a") // arrives before arm
+	g.arm([]string{"a", "b", "c"})
+
+	if readyCalls != 0 {
+		t.Fatalf("ready calls = %d right after arming with the pre-arm key plus two more, want 0 (b, c still owed)", readyCalls)
+	}
+
+	g.markReceived("b")
+	if readyCalls != 0 {
+		t.Fatalf("ready calls = %d after marking one of the two remaining owed keys, want 0", readyCalls)
+	}
+
+	g.markReceived("c")
+	if readyCalls != 1 {
+		t.Fatalf("ready calls = %d after marking the last remaining owed key, want 1", readyCalls)
+	}
+}
+
+// TestStartupGate_PreArmReceiptsNeverFireByThemselves references AC-2's
+// first clause directly: any number of markReceived calls before arm has
+// ever run must never invoke ready on their own.
+func TestStartupGate_PreArmReceiptsNeverFireByThemselves(t *testing.T) {
+	var readyCalls int
+	g := newStartupGate(func() { readyCalls++ }, time.Hour)
+
+	g.markReceived("a")
+	g.markReceived("b")
+	g.markReceived("unrelated")
+
+	if readyCalls != 0 {
+		t.Fatalf("ready calls = %d after pre-arm markReceived calls with no arm yet, want 0", readyCalls)
+	}
+}
+
+// TestStartupGate_PreArmReceiptThenFireNow_OneShotSemanticsPreserved
+// references AC-2's one-shot clause: a pre-arm receipt followed by fireNow
+// (the first-load-failure path) must not double-fire, and a later arm
+// attempt using the buffered key must stay a no-op, exactly like the
+// existing one-shot behavior.
+func TestStartupGate_PreArmReceiptThenFireNow_OneShotSemanticsPreserved(t *testing.T) {
+	var readyCalls int
+	g := newStartupGate(func() { readyCalls++ }, time.Hour)
+
+	g.markReceived("a") // arrives before arm/fireNow
+	g.fireNow()
+	if readyCalls != 1 {
+		t.Fatalf("ready calls = %d after fireNow with a pending pre-arm receipt, want 1", readyCalls)
+	}
+
+	g.arm([]string{"a"}) // gate already started; must be a no-op
+	if readyCalls != 1 {
+		t.Fatalf("ready calls = %d after a re-arm attempt following fireNow, want still 1", readyCalls)
+	}
+
+	g.markReceived("a") // must not fire a second time either
+	if readyCalls != 1 {
+		t.Fatalf("ready calls = %d after marking the re-arm attempt's key again, want still 1", readyCalls)
+	}
+}
+
 // --- AC-4: fires on timeout with keys still owed ---
 
 // TestStartupGate_FiresWhenTimeoutElapsesWithKeysStillOwed references AC-4.
