@@ -77,6 +77,18 @@ func New(quit func(), onKeepAboveToggle func(enabled bool)) *UI {
 			// UpdateSection call onto a new, hidden frame while the visible
 			// window goes stale (task0003 Fix 3, finding 6ff3de2d6683a663).
 			// Keep the existing frame; no re-registration either.
+			//
+			// Once the window has already been presented, raise it again
+			// so a second launch brings it to the front (task0004 Fix 2,
+			// finding 454d0fb9e0a99942: pre-task0003 behavior did this and
+			// it regressed). Calling the toplevel's own Present directly,
+			// not frame.present(), matters: this is a raise, not a re-fit
+			// -- frame.present() would also re-run preMapFit, which must
+			// not happen here. Before first presentation (the gate has not
+			// fired yet) do nothing, so the hidden frame stays hidden.
+			if u.presented {
+				u.frame.win.Present()
+			}
 			return
 		}
 		// Registration must happen after activation begins (GTK is

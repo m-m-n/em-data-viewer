@@ -445,6 +445,123 @@ func TestApplyConfig_FailurePathOnlyDispatchesTheBanner(t *testing.T) {
 	}
 }
 
+// --- startup-window-fit task0004 Fix 1, AC-1/AC-2: projection-before-runner
+// ordering ---
+
+// orderingRunner is a Runner whose Apply call records "apply" into a shared
+// order slice, letting a test observe when it was invoked relative to other
+// recorded actions (task0004 AC-1).
+type orderingRunner struct {
+	order      *[]string
+	applyCalls [][]runner.SectionConfig
+}
+
+func (r *orderingRunner) Apply(sections []runner.SectionConfig) {
+	*r.order = append(*r.order, "apply")
+	r.applyCalls = append(r.applyCalls, sections)
+}
+func (r *orderingRunner) Stop()                        {}
+func (r *orderingRunner) Events() <-chan runner.Event  { return nil }
+func (r *orderingRunner) Snapshot(key string) []string { return nil }
+
+// TestApplyConfig_SuccessOrdersProjectionDispatchThenGateArmThenRunnerApply
+// references AC-1: in the success path, the projection dispatch, the gate
+// arming, and the runner apply are invoked in exactly that order. The
+// gate's arm call has no directly observable side effect unless it fires,
+// so both of cfg's section keys are marked received before applyConfig
+// runs -- gate.go is out of scope for this task, and pre-arm receipts
+// reconciling to an empty owed set is the gate's own documented behavior
+// (task0003 Fix 1), giving arm() a synchronous, observable "fired" moment
+// exactly when applyConfig invokes it.
+func TestApplyConfig_SuccessOrdersProjectionDispatchThenGateArmThenRunnerApply(t *testing.T) {
+	cfg := sampleConfig()
+	u := &fakeUI{}
+	store := newSectionStore()
+	gens := newGenerationTracker()
+
+	var order []string
+	r := &orderingRunner{order: &order}
+
+	g := newStartupGate(func() {
+		order = append(order, "arm")
+	}, time.Hour)
+	g.markReceived(cfg.Sections[0].Key())
+	g.markReceived(cfg.Sections[1].Key())
+
+	dispatch := func(fn func()) {
+		order = append(order, "dispatch")
+	}
+
+	applyConfig(cfg, nil, r, store, gens.next(), gens, u, dispatch, g)
+
+	want := []string{"dispatch", "arm", "apply"}
+	if !reflect.DeepEqual(order, want) {
+		t.Fatalf("invocation order = %v, want %v (AC-1: projection dispatch, then gate arm, then runner apply)", order, want)
+	}
+	if len(r.applyCalls) != 1 {
+		t.Fatalf("runner.Apply calls = %d, want 1", len(r.applyCalls))
+	}
+}
+
+// fifoRunner is a Runner whose Apply call synchronously triggers onApply,
+// simulating a runner event whose UI update is scheduled onto the SAME FIFO
+// dispatcher applyConfig itself uses, as fast as an event could possibly
+// arrive: the instant Apply runs (task0004 AC-2).
+type fifoRunner struct {
+	onApply func()
+}
+
+func (r *fifoRunner) Apply(sections []runner.SectionConfig) {
+	if r.onApply != nil {
+		r.onApply()
+	}
+}
+func (r *fifoRunner) Stop()                        {}
+func (r *fifoRunner) Events() <-chan runner.Event  { return nil }
+func (r *fifoRunner) Snapshot(key string) []string { return nil }
+
+// TestApplyConfig_RunnerEventDispatchedTheInstantApplyRunsStillAppliesAfterProjection
+// references AC-2: with a FIFO dispatcher, a runner event consumed
+// immediately after apply produces its section update after the projection
+// callback -- no update is lost to missing widgets. This test fails under
+// the pre-task0004 ordering (runner apply before the projection dispatch),
+// where the fastest-possible event would be queued ahead of the projection
+// that creates the section widgets it targets.
+func TestApplyConfig_RunnerEventDispatchedTheInstantApplyRunsStillAppliesAfterProjection(t *testing.T) {
+	cfg := sampleConfig()
+	key := cfg.Sections[0].Key()
+	u := &fakeUI{}
+	store := newSectionStore()
+	gens := newGenerationTracker()
+	capture := &capturingDispatch{}
+
+	r := &fifoRunner{}
+	r.onApply = func() {
+		capture.dispatch(func() {
+			u.UpdateSection(key, "first output", false)
+		})
+	}
+
+	applyConfig(cfg, nil, r, store, gens.next(), gens, u, capture.dispatch, noopGate())
+
+	if len(capture.calls) != 2 {
+		t.Fatalf("dispatch calls = %d, want 2 (the projection, then the fast event's update)", len(capture.calls))
+	}
+
+	capture.calls[0]()
+	if len(u.sections) != 1 {
+		t.Fatalf("running the FIRST dispatched call did not apply the projection (SetSections) -- want it queued before the event update")
+	}
+	if len(u.updates) != 0 {
+		t.Fatalf("event update applied before the projection ran: %+v", u.updates)
+	}
+
+	capture.calls[1]()
+	if len(u.updates) != 1 || u.updates[0].key != key {
+		t.Fatalf("running the SECOND dispatched call did not apply the event update to %q: %+v", key, u.updates)
+	}
+}
+
 // --- window-drag-keep-above AC-1, AC-4: reload projection routes keep_above ---
 
 // TestApplyConfig_DispatchesSetKeepAboveWithConfigValue references

@@ -68,17 +68,28 @@ func reload(path string, holder *config.Holder, r Runner, store *sectionStore, g
 // applyConfig translates one load outcome into runner/UI side effects
 // (FR9, AC-4): on failure, only a banner update is dispatched — window,
 // sections and the runner's section list are left exactly as they were
-// (last-good behavior). On success, the runner is reconciled and the
-// rehydration data is computed immediately, on the calling goroutine, off
-// the GTK main loop; only the resulting UI projection (banner clear,
-// window settings, keep_above, section view models, rehydration updates)
-// is handed to dispatch, gated by gens.markApplied so a stale reload cannot
-// overwrite a newer one (AC-5). The keep_above value is applied every
-// successful reload (startup and every watch-triggered reload alike,
-// window-drag-keep-above AC-1); applying the same value repeatedly is a
-// deliberate no-op at the UI layer rather than something this function
-// special-cases (window-drag-keep-above AC-4, Design: "must be a no-op
-// visually").
+// (last-good behavior). On success, the rehydration data is computed
+// immediately, on the calling goroutine, off the GTK main loop; only the
+// resulting UI projection (banner clear, window settings, keep_above,
+// section view models, rehydration updates) is handed to dispatch, gated by
+// gens.markApplied so a stale reload cannot overwrite a newer one (AC-5).
+// The keep_above value is applied every successful reload (startup and
+// every watch-triggered reload alike, window-drag-keep-above AC-1);
+// applying the same value repeatedly is a deliberate no-op at the UI layer
+// rather than something this function special-cases (window-drag-keep-above
+// AC-4, Design: "must be a no-op visually").
+//
+// Ordering of the three success-path side effects — projection dispatch,
+// gate arm, runner apply — is deliberate and load-bearing (startup-window-fit
+// task0004 Fix 1, findings 26b3ce832cd1a156/86803c68798485df): the runner is
+// reconciled LAST, after the projection has already been queued and the
+// gate armed. Reconciling it first (the pre-task0004 order) let a fast
+// first runner event race ahead of the projection on the FIFO main-loop
+// queue — its UI update would find no section widgets yet (silently
+// dropped) while its receipt still satisfied the gate, producing a
+// presented window with unapplied data. With the runner started last, every
+// event it can possibly produce is scheduled on the FIFO queue strictly
+// after the projection that creates the widgets those events target.
 //
 // gate wiring (startup-window-fit task0001 Design, "Wiring flow" step 1):
 // on failure, gate.fireNow() requests an immediate presentation (FR4) --
@@ -87,12 +98,15 @@ func reload(path string, holder *config.Holder, r Runner, store *sectionStore, g
 // armed or fired once, is a no-op (IMPLEMENTATION.md decision 4). On
 // success, gate.arm() arms the gate with the reconciled section keys;
 // arming with zero keys (a zero-section config) fires immediately inside
-// arm itself (FR4), so this function does not special-case that count. In
-// both branches, the gate call happens AFTER dispatch has already queued
-// this reload's own UI projection, so if the gate fires synchronously and
-// dispatches a present request, that request is queued strictly after the
-// projection it depends on (the FIFO ordering guarantee AC-7 relies on for
-// the runner-event path applies here too, for the immediate-fire path).
+// arm itself (FR4), so this function does not special-case that count. The
+// gate call happens AFTER dispatch has already queued this reload's own UI
+// projection, so if the gate fires synchronously and dispatches a present
+// request, that request is queued strictly after the projection it depends
+// on (the FIFO ordering guarantee AC-7 relies on for the runner-event path
+// applies here too, for the immediate-fire path). The gate is also armed
+// before runner apply, so the pre-arm receipt buffer (task0003 Fix 1) can
+// only ever be needed for events that arrive on a goroutine that raced
+// ahead of this synchronous call sequence, never for the common case.
 func applyConfig(cfg config.Config, err error, r Runner, store *sectionStore, gen uint64, gens *generationTracker, u UI, dispatch func(func()), gate *startupGate) {
 	if err != nil {
 		dispatch(func() {
@@ -105,7 +119,6 @@ func applyConfig(cfg config.Config, err error, r Runner, store *sectionStore, ge
 		return
 	}
 
-	r.Apply(runnerSections(cfg.Sections))
 	sections := sectionViewModels(cfg.Sections)
 	rehydrations := rehydrationsFor(cfg.Sections, store)
 	window := ui.WindowSettings{
@@ -127,6 +140,8 @@ func applyConfig(cfg config.Config, err error, r Runner, store *sectionStore, ge
 	})
 
 	gate.arm(sectionKeys(cfg.Sections))
+
+	r.Apply(runnerSections(cfg.Sections))
 }
 
 // sectionKeys returns the key of every non-break section in sections
