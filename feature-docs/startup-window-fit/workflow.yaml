@@ -1,0 +1,118 @@
+schema_version: 1
+feature: startup-window-fit
+created: 2026-07-20
+base_branch: main
+parent_branch: em-workflow/startup-window-fit/integration
+
+project:
+  license: MIT
+  components:
+    main:
+      language: go
+      build_command: "go build ./..."
+      test_command: "go test ./..."
+      format_command: "gofmt -l -w ."
+      e2e_test_command: ""
+
+workflow:
+  - id: create-spec
+    artifacts: [REQUIREMENTS.md, SPEC.md]
+    status: completed
+    completed_at_commit: eff960954efcab280cd30f26defd9ea7f0b5ba84
+  - id: design
+    artifacts: [DESIGN.md, design/]
+    status: skipped
+    skipped_reason: "見た目の新規決定はなく、表示タイミングとサイズ確定順序のみの変更のため視覚デザイン判断が不要"
+  - id: create-plan
+    artifacts: [IMPLEMENTATION.md, VERIFICATION.md, tasks/]
+    status: completed
+    completed_at_commit: eff960954efcab280cd30f26defd9ea7f0b5ba84
+  - id: implement
+    status: pending
+  - id: review
+    status: pending
+  - id: verify
+    status: pending
+    result: null
+    failed_items: []
+  - id: retrospect
+    status: pending
+
+tasks:
+  task0001:
+    title: "Startup readiness gate (app layer)"
+    plan: tasks/task0001.md
+    files:
+      - internal/app/gate.go
+      - internal/app/gate_test.go
+      - internal/app/app.go
+      - internal/app/events.go
+      - internal/app/reload.go
+    skills: [frontend-impl]
+    domains: [concurrency, ui]
+    complexity: high
+    requirements: [FR1, FR2, FR3, FR4, NFR1, NFR2]
+    status: pending
+    notes: null
+  task0002:
+    title: "Deferred presentation & width-derived fitting (ui layer)"
+    plan: tasks/task0002.md
+    files:
+      - internal/ui/ui.go
+      - internal/ui/window.go
+      - internal/ui/sections.go
+      - internal/ui/fit_test.go
+    skills: [design-impl]
+    domains: [ui]
+    complexity: high
+    requirements: [FR1, FR5, NFR2]
+    status: pending
+    notes: null
+
+review:
+  status: pending
+  rounds_completed: 0
+
+requirements:
+  FR1:
+    title: "Defer first Present until all first data received or 1s elapsed; fully invisible while deferred"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001, task0002]
+    tests: [TS-1, TS-4, M-1, M-2]
+  FR2:
+    title: "First-data semantics: interval first result / stream first event; errors count as received"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-2, TS-3]
+  FR3:
+    title: "Fixed 1s timeout: present with label-only empty sections; late data via normal update path"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-4, TS-6, M-3]
+  FR4:
+    title: "Config load failure or zero sections: present immediately"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-5, M-4]
+  FR5:
+    title: "Presented height computed from real row-packed layout via allocation-settled refit"
+    status: ok
+    tbd_reason: null
+    tasks: [task0002]
+    tests: [TS-7, TS-8, TS-9, M-1]
+  NFR1:
+    title: "No polling / fixed-FPS loops; keep event-driven blocking-wait architecture"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [M-6]
+  NFR2:
+    title: "Startup-gate logic GUI-free and go-test-able; GTK glue stays thin"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001, task0002]
+    tests: [TS-1, TS-7, M-6]
