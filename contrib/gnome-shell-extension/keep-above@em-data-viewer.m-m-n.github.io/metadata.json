@@ -1,0 +1,6 @@
+{
+    "uuid": "keep-above@em-data-viewer.m-m-n.github.io",
+    "name": "em-data-viewer Keep Above",
+    "description": "Keeps em-data-viewer windows always above other windows on Wayland.",
+    "shell-version": ["50"]
+}
