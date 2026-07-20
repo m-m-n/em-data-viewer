@@ -1,0 +1,118 @@
+schema_version: 1
+feature: wayland-keep-above-extension
+created: 2026-07-21
+base_branch: main
+parent_branch: em-workflow/wayland-keep-above-extension/integration
+
+project:
+  license: MIT
+  components:
+    main:
+      language: go
+      build_command: "go build ./..."
+      test_command: "go test ./..."
+      format_command: "gofmt -l -w ."
+      e2e_test_command: ""
+
+workflow:
+  - id: create-spec
+    artifacts: [REQUIREMENTS.md, SPEC.md]
+    status: completed
+    completed_at_commit: 8023d24333b5c9361a84e83738ad02d9b5d48925
+  - id: design
+    artifacts: [DESIGN.md, design/]
+    status: skipped
+    skipped_reason: "UI の見た目の新規決定はなく、バックグラウンドで動く Shell 拡張と Makefile ターゲットのみのため視覚デザイン判断が不要"
+  - id: create-plan
+    artifacts: [IMPLEMENTATION.md, VERIFICATION.md, tasks/]
+    status: completed
+    completed_at_commit: 8023d24333b5c9361a84e83738ad02d9b5d48925
+  - id: implement
+    status: pending
+  - id: review
+    status: pending
+  - id: verify
+    status: pending
+    result: null
+    failed_items: []
+  - id: retrospect
+    status: pending
+
+tasks:
+  task0001:
+    title: "GNOME Shell keep-above extension (extension.js + metadata.json)"
+    plan: tasks/task0001.md
+    files:
+      - contrib/gnome-shell-extension/keep-above@em-data-viewer.m-m-n.github.io/metadata.json
+      - contrib/gnome-shell-extension/keep-above@em-data-viewer.m-m-n.github.io/extension.js
+    skills: [frontend-impl]
+    domains: [ui]
+    complexity: medium
+    requirements: [FR1, FR2, FR3, FR4, NFR1, NFR2]
+    status: pending
+    notes: null
+  task0002:
+    title: "Makefile install-extension / uninstall-extension targets"
+    plan: tasks/task0002.md
+    files:
+      - Makefile
+    skills: [infra-impl]
+    domains: [config-infra, external-io]
+    complexity: low
+    requirements: [FR5, FR6, NFR2]
+    status: pending
+    notes: null
+
+review:
+  status: pending
+  rounds_completed: 0
+
+requirements:
+  FR1:
+    title: "Extension source layout: contrib dir, extension.js + metadata.json (uuid, shell-version [50], ESM)"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-2]
+  FR2:
+    title: "Unconditional make_above() for app id io.github.m_m_n.EmDataViewer via window-created, with late-id handling"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [M-2, M-6]
+  FR3:
+    title: "Apply to existing windows on enable() before watching window-created"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [M-3]
+  FR4:
+    title: "disable() disconnects all handlers and unmake_above() on matched windows"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [M-4]
+  FR5:
+    title: "make install-extension: copy to user extensions dir, enable, re-login guidance on fresh install"
+    status: ok
+    tbd_reason: null
+    tasks: [task0002]
+    tests: [TS-3, M-1]
+  FR6:
+    title: "make uninstall-extension: disable (failure tolerated) and remove extension dir"
+    status: ok
+    tbd_reason: null
+    tasks: [task0002]
+    tests: [TS-3, M-5]
+  NFR1:
+    title: "GNOME Shell 50 / Wayland compatibility; self-contained GJS, GNOME 50 Mutter APIs only"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-2, M-2]
+  NFR2:
+    title: "No Go app changes; Go build/tests unaffected; extension excluded from automated tests"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001, task0002]
+    tests: [TS-1, M-7]
