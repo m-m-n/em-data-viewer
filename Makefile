@@ -14,8 +14,16 @@ EMBED_DIR    := $(BUILD_DIR)/embed-icons
 EMBED_SIZES  := 16 32 48 64 128 256
 GRESOURCE_XML := assets/icon.gresource.xml
 GRESOURCE_OUT := internal/ui/icon.gresource
+# EXT_UUID is the GNOME Shell extension identity (task0002 FR5/FR6): it is
+# simultaneously the source directory basename below and the metadata.json
+# "uuid" field (see feature-docs/wayland-keep-above-extension/IMPLEMENTATION.md
+# Shared Components — this literal is the single source of truth).
+EXT_UUID          := keep-above@em-data-viewer.m-m-n.github.io
+EXT_SRC_DIR       := contrib/gnome-shell-extension/$(EXT_UUID)
+EXT_INSTALL_DIR   := $(HOME)/.local/share/gnome-shell/extensions/$(EXT_UUID)
+GNOME_EXTENSIONS_CLI := gnome-extensions
 
-.PHONY: all build dpkg icons resources test clean
+.PHONY: all build dpkg icons resources test clean install-extension uninstall-extension
 
 all: build
 
@@ -91,3 +99,32 @@ dpkg: build icons
 
 clean:
 	rm -rf $(BUILD_DIR)
+
+# install-extension copies the bundled GNOME Shell extension (task0001) into
+# the current user's per-user extensions directory and enables it (FR5).
+# Fresh installs are detected before the copy overwrites anything: either the
+# install directory does not exist yet, or the running Shell does not yet
+# know the uuid. On a fresh install, `enable` may be a no-op (the Shell has
+# not scanned the new directory) so its failure is tolerated and re-login
+# guidance is printed instead.
+install-extension:
+	@command -v $(GNOME_EXTENSIONS_CLI) >/dev/null 2>&1 || { echo "install-extension: $(GNOME_EXTENSIONS_CLI) not found on PATH" >&2; exit 1; }
+	@fresh=0; \
+	[ -d "$(EXT_INSTALL_DIR)" ] || fresh=1; \
+	$(GNOME_EXTENSIONS_CLI) list | grep -Fxq "$(EXT_UUID)" || fresh=1; \
+	rm -rf "$(EXT_INSTALL_DIR)" && \
+	mkdir -p "$(EXT_INSTALL_DIR)" && \
+	cp -r "$(EXT_SRC_DIR)/." "$(EXT_INSTALL_DIR)/" && \
+	{ $(GNOME_EXTENSIONS_CLI) enable "$(EXT_UUID)" >/dev/null 2>&1 || true; } && \
+	if [ "$$fresh" = "1" ]; then \
+		echo "install-extension: fresh install of $(EXT_UUID) -- log out and back in (required on Wayland) for GNOME Shell to load it"; \
+	fi
+
+# uninstall-extension disables (failure tolerated: Shell absent, extension
+# unknown, or already disabled) and removes the installed extension
+# directory (FR6). Running it when the extension is not installed exits 0.
+uninstall-extension:
+	@if command -v $(GNOME_EXTENSIONS_CLI) >/dev/null 2>&1; then \
+		$(GNOME_EXTENSIONS_CLI) disable "$(EXT_UUID)" >/dev/null 2>&1 || true; \
+	fi
+	rm -rf "$(EXT_INSTALL_DIR)"
