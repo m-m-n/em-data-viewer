@@ -69,6 +69,16 @@ func New(quit func(), onKeepAboveToggle func(enabled bool)) *UI {
 		quit: quit,
 	}
 	u.app.ConnectActivate(func() {
+		if u.frame != nil {
+			// A repeat activation of this single-instance application (a
+			// second launch) must not replace the existing frame: presented
+			// is one-shot for the process lifetime, but recreating the frame
+			// here would swap every subsequent ApplyWindow/SetSections/
+			// UpdateSection call onto a new, hidden frame while the visible
+			// window goes stale (task0003 Fix 3, finding 6ff3de2d6683a663).
+			// Keep the existing frame; no re-registration either.
+			return
+		}
 		// Registration must happen after activation begins (GTK is
 		// initialized) and before newFrame builds the window, so the icon
 		// theme has the resource path available the moment the window
