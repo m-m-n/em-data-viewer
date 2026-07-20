@@ -41,8 +41,8 @@ findings:
     suggestion: "config projection がセクションを生成するまでイベントをバッファして UpdateSection 成功後に markReceived するか、Runner.Apply がイベントを生みうる前に projection の dispatch を保証する。"
     sources: [codex:architecture]
     confidence: 50
-    resolution: unresolved
-    resolution_reason: "rework (task0004) で修正予定: applyConfig の順序変更 (projection dispatch → gate.arm → r.Apply)"
+    resolution: fixed
+    resolution_reason: "task0004 で修正 (projection dispatch → gate.arm → r.Apply の順序変更)、round 3 で全レビュアーが検証済み"
   - stable_id: 86803c68798485df
     severity: high
     category: spec
@@ -53,8 +53,8 @@ findings:
     suggestion: "SetSections projection が queue されてから r.Apply がイベントを生めるよう順序を保証するか、pre-arm イベントの payload をバッファして projection 後に再適用する。"
     sources: [codex:spec]
     confidence: 50
-    resolution: unresolved
-    resolution_reason: "rework (task0004) で修正予定: 同上 (26b3ce832cd1a156 と同一根本原因)"
+    resolution: fixed
+    resolution_reason: "task0004 で修正 (26b3ce832cd1a156 と同一根本原因)、round 3 で検証済み"
   - stable_id: 454d0fb9e0a99942
     severity: medium
     category: comprehensive
@@ -65,8 +65,8 @@ findings:
     suggestion: "early return 分岐で presented 済みの場合のみ既存ウィンドウを再 Present して raise する (gate 未発火の隠れ frame は見せない)。"
     sources: [claude:comprehensive]
     confidence: 65
-    resolution: unresolved
-    resolution_reason: "rework (task0004) で修正予定"
+    resolution: fixed
+    resolution_reason: "task0004 で修正 (presented ガード付き再 Present)、round 3 で検証済み"
 auto_fix:
   loops_run: 0
   applied_total: 0

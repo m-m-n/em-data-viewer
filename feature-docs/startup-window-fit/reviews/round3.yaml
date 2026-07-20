@@ -1,0 +1,63 @@
+round: 3
+executed_at: "2026-07-20T21:55:00+09:00"
+scope:
+  review_mode: diff
+  base_commit: eff960954efcab280cd30f26defd9ea7f0b5ba84
+  head_commit: 355d33dc6971f1f26117da1ce07e9fa3bdea728f
+  changed_files:
+    - internal/app/app.go
+    - internal/app/app_test.go
+    - internal/app/events.go
+    - internal/app/gate.go
+    - internal/app/gate_test.go
+    - internal/app/reload.go
+    - internal/ui/fit_test.go
+    - internal/ui/sections.go
+    - internal/ui/ui.go
+    - internal/ui/window.go
+    - internal/ui/window_test.go
+plan:
+  floor: [comprehensive, performance, architecture, spec]
+  discretionary: []
+  codex_cross_validation: true
+perspective_runs:
+  - {perspective: comprehensive, source: claude, status: completed}
+  - {perspective: performance, source: claude, status: completed}
+  - {perspective: performance, source: codex, status: completed}
+  - {perspective: architecture, source: claude, status: completed}
+  - {perspective: architecture, source: codex, status: completed}
+  - {perspective: spec, source: claude, status: completed}
+  - {perspective: spec, source: codex, status: completed}
+round2_verification:
+  note: "round2 の unresolved 3 findings (26b3ce832cd1a156 / 86803c68798485df / 454d0fb9e0a99942) は task0004 の修正 (projection dispatch → gate.arm → r.Apply の順序変更、presented ガード付き再 Present) が全レビュアーにより解消と検証された (round2.yaml 側で fixed に更新)"
+findings:
+  - stable_id: f1046c5153643d9e
+    severity: medium
+    category: architecture
+    file: internal/app/app.go
+    line: 78
+    title: "Required presentation capability is hidden behind an optional downcast"
+    description: "app 層 UI インターフェースが Present を宣言せず PresenterUI への型アサーションに依存している、という指摘。round 1 で declined 済みの 116a0f8a7c93d183 (app.go:77) と同一サイト・同一内容の再指摘 (タイトル一語違いで stable_id が変わり機械 suppression を逃れたもの)。app.go は round 1 の head_commit 以降未変更。"
+    suggestion: "UI インターフェースに Present() を正式追加する。"
+    sources: [codex:architecture, codex:spec]
+    confidence: 65
+    resolution: declined
+    resolution_reason: "round 1 declined (116a0f8a7c93d183) の relitigation。既存 KeepAboveUI パターン踏襲の意図的 optional-capability seam (IMPLEMENTATION.md Shared Components 記載) というプロジェクト慣習の判断は不変。"
+  - stable_id: a2a511470aefa2dd
+    severity: medium
+    category: architecture
+    file: internal/app/reload.go
+    line: 142
+    title: "Gate and runner independently derive the runnable section set"
+    description: "applyConfig が readiness キーを sectionKeys で、ランナー入力を runnerSections で独立に導出し、IsBreak フィルタ規則が2箇所に重複している。将来どちらか一方だけ実行可能セクションの判定が変わると、gate が決して来ないイベントを待ってタイムアウトまで表示遅延する、または gate 対象のはずのプロセスが漏れるリスク。現状は両者の規則が一致しており実害なし。"
+    suggestion: "runnerSections を一度だけ計算し、gate キーをその結果から導出して単一の情報源にする。"
+    sources: [codex:architecture, codex:spec]
+    confidence: 65
+    resolution: deferred
+    resolution_reason: "実害のない保守性改善提案。現状は両導出の規則が一致しており動作上の問題はないため、将来のリファクタ候補として記録に残す (ユーザー了承のうえ完了)。"
+auto_fix:
+  loops_run: 0
+  applied_total: 0
+  termination: clean
+residual_critical_high: 0
+rework_required: false

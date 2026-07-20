@@ -28,16 +28,21 @@ workflow:
     status: completed
     completed_at_commit: eff960954efcab280cd30f26defd9ea7f0b5ba84
   - id: implement
-    status: in_progress
+    status: completed
+    completed_at_commit: 355d33dc6971f1f26117da1ce07e9fa3bdea728f
     base_commit: eff960954efcab280cd30f26defd9ea7f0b5ba84
   - id: review
-    status: pending
+    status: completed
+    completed_at_commit: 355d33dc6971f1f26117da1ce07e9fa3bdea728f
   - id: verify
-    status: pending
-    result: null
+    status: completed
+    completed_at_commit: 355d33dc6971f1f26117da1ce07e9fa3bdea728f
+    result: pass
     failed_items: []
+    notes: "build/test/format 全pass、worktree クリーン。TS-1〜TS-9 は対応ユニットテストで自動確認済み。M-6 (no polling / GUI-free) はレビュー3ラウンドで担保。M-1〜M-5 (一発表示・1秒タイムアウト・sleep遅延・エラー/空config・定常回帰) は実機での手動確認が必要"
   - id: retrospect
-    status: pending
+    status: completed
+    completed_at_commit: 355d33dc6971f1f26117da1ce07e9fa3bdea728f
 
 tasks:
   task0001:
@@ -98,13 +103,13 @@ tasks:
     domains: [concurrency, ui]
     complexity: high
     requirements: [FR1, FR2]
-    status: in_progress
+    status: merged
     notes: "review round 2 rework: findings 26b3ce832cd1a156 / 86803c68798485df / 454d0fb9e0a99942"
     branch: em-workflow/startup-window-fit/task0004
 
 review:
-  status: pending
-  rounds_completed: 2
+  status: completed
+  rounds_completed: 3
   plan:
     floor: [comprehensive, performance, architecture, spec]
     discretionary: []
@@ -114,8 +119,8 @@ review:
     performance: completed
     architecture: completed
     spec: completed
-  residual_critical_high: 2
-  needs_rework: true
+  residual_critical_high: 0
+  needs_rework: false
 
 requirements:
   FR1:

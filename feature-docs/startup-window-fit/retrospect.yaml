@@ -1,0 +1,24 @@
+feature: startup-window-fit
+collected_at: "2026-07-20T21:42:04+09:00"
+session_ids: [e0972461-8984-4460-abb9-f8b6896e285b]
+signals:
+  review_critical_high:
+    - {stable_id: b690fe0ec7573b25, category: spec, file: internal/app/reload.go, title: "The gate is armed after first events can already be consumed", resolution: fixed}
+    - {stable_id: 4589d8a8b6d4a872, category: spec, file: internal/ui/window.go, title: "Presentation occurs before an allocation-settled refit", resolution: declined}
+    - {stable_id: 26b3ce832cd1a156, category: architecture, file: internal/app/events.go, title: "Gate readiness can precede successful section projection", resolution: fixed}
+    - {stable_id: 86803c68798485df, category: spec, file: internal/app/reload.go, title: "Pre-arm events can still be discarded before presentation", resolution: fixed}
+  conflict_reworks: []
+  file_prediction_misses:
+    - {task: task0001, files: [internal/app/app_test.go]}
+  verification_failures: []
+  discretionary_perspectives: []
+  declined_findings:
+    - {stable_id: 4589d8a8b6d4a872, category: spec, resolution_reason: "GTK制約 (map前にallocation不在) による幅導出設計。SPEC文言を実装設計に合わせて更新"}
+    - {stable_id: 883ae98b0938e458, category: spec, resolution_reason: "タイムアウト起点の SPEC 文言を arm 起点に更新 (差は数十ms で観測不能)"}
+    - {stable_id: 8a2f5fde8e131065, category: spec, resolution_reason: "SPEC のテスト項目が実装過剰指定だったため文言修正"}
+    - {stable_id: 116a0f8a7c93d183, category: architecture, resolution_reason: "KeepAboveUI 踏襲の意図的 optional-capability seam (IMPLEMENTATION.md 記載)"}
+    - {stable_id: f1046c5153643d9e, category: architecture, resolution_reason: "上記 116a0f8a の relitigation (タイトル一語違いで stable_id がずれ機械 suppression を逃れた)"}
+lessons_candidates:
+  - "イベントソース (runner) の起動と、その効果の受け皿 (UI projection / gate arm) の順序は、計画段階で happens-before として明示すべきだった。round1 の pre-arm バッファ修正は readiness の会計だけを救い、UI 反映の喪失 (round2 high) を残した — 「ソースを最後に起動する」順序変更が根本解で、最初からそう設計できた"
+  - "GTK の「map 前に allocation は存在しない」制約は create-spec 時点の SPEC 文言 (allocation-settled refit before Present) と矛盾しており、planner が設計判断3で解消した。プラットフォーム制約は SPEC 起草時に織り込む方が spec レビューの誤検知 (round1 high declined) を防げた"
+  - "stable_id はタイトル正規化に依存するため、同一内容の再指摘がタイトル一語違いで suppression を逃れる (round3 f1046c5153643d9e)。same_site + declined 済みの内容一致は orchestrator 裁量で relitigation と判定した"
