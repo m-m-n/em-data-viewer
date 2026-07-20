@@ -14,6 +14,14 @@ import (
 // (Design: "empty state (zero sections)").
 const minFrameHeight = 48
 
+// minContentWidth is deriveContentWidth's positive floor (task0003 Fix 2,
+// FR5: "the derived content width must always be positive"): the smallest
+// value it ever returns, regardless of how the configured/fallback width
+// and chrome combine (including chrome >= width). Any value <= 0 would
+// re-enter packRows/packRowsWithBreaks' width-0 degraded case (one section
+// per row) at presentation time, which FR5 forbids.
+const minContentWidth = 1
+
 // windowIconName is the themed icon name the window declares at
 // construction (FR5, NFR2). It is the cross-task contract pinned in
 // IMPLEMENTATION.md Shared Components: hicolor theme files, the .desktop
@@ -44,6 +52,12 @@ type frame struct {
 	// size, so a width read back from GTK can silently lose the
 	// configured value.
 	settingsWidth int
+
+	// mapRefitAttempts counts mapReflowAndRefit's self-re-arms so far
+	// (task0003 Fix 4): reset implicitly by never being incremented once
+	// shouldRetryMapRefit reports "stop" for either reason (allocation
+	// settled, or the retry budget is exhausted).
+	mapRefitAttempts int
 
 	keepAboveBackend keepAboveBackend
 	keepAboveEnabled bool
@@ -279,6 +293,16 @@ func (f *frame) reflowAndRefit() {
 	f.refit()
 }
 
+// maxMapRefitRetries bounds mapReflowAndRefit's self-re-arming (task0003
+// Fix 4, finding 3b93f2acf0fd701d): in a degenerate geometry where the
+// content root's allocation never settles positive, retrying without bound
+// would re-schedule a glib.IdleAdd callback on every main-loop iteration
+// indefinitely, busy-spinning the loop. After this many retries the safety
+// net gives up silently instead -- presentation already applied the
+// pre-map fit (present/preMapFit), so this path exists only to correct a
+// late-settling allocation, not to guarantee one.
+const maxMapRefitRetries = 30
+
 // mapReflowAndRefit is the map signal's deferred trigger (task0002 Design:
 // "Steady-state safety net"). task0002 presents the window already fitted
 // (present/preMapFit below), so this path is reached only as a safety net,
@@ -288,22 +312,37 @@ func (f *frame) reflowAndRefit() {
 // exists yet, instead of applying (and then permanently no-oping, the way
 // running reflowAndRefit directly here once did) a fit computed from a
 // width that does not exist (AC-5); once an allocation exists it fits
-// exactly once via reflowAndRefit, same as before task0002.
+// exactly once via reflowAndRefit, same as before task0002. The re-arm is
+// bounded (task0003 Fix 4, AC-5): once shouldRetryMapRefit reports "stop"
+// because the retry budget is exhausted rather than because an allocation
+// settled, this gives up silently instead of fitting against a still-zero
+// width.
 func (f *frame) mapReflowAndRefit() {
-	if shouldRetryMapRefit(f.root.AllocatedWidth()) {
+	allocatedWidth := f.root.AllocatedWidth()
+	if shouldRetryMapRefit(allocatedWidth, f.mapRefitAttempts) {
+		f.mapRefitAttempts++
 		glib.IdleAdd(f.mapReflowAndRefit)
+		return
+	}
+	if allocatedWidth <= 0 {
+		// Retry budget exhausted while still degenerate: give up silently
+		// (task0003 Fix 4) rather than fitting against the width-0
+		// degraded case refit itself already guards against.
 		return
 	}
 	f.reflowAndRefit()
 }
 
 // shouldRetryMapRefit is mapReflowAndRefit's pure retry decision: true
-// while the content root has no allocation yet, meaning a fit computed now
+// while the content root has no allocation yet AND the retry budget
+// (maxMapRefitRetries) is not yet exhausted, meaning a fit computed now
 // would be the width-0 degraded case refit itself already guards against
-// via its own AllocatedWidth check. Pure and GUI-free so the decision is
-// unit-testable without GTK (task0002 AC-5, Test Notes).
-func shouldRetryMapRefit(allocatedWidth int) bool {
-	return allocatedWidth <= 0
+// via its own AllocatedWidth check. Reports "stop" (false) once either the
+// allocation has settled or attempt has reached the bound (task0003 Fix
+// 4, AC-5). Pure and GUI-free so the decision is unit-testable without GTK
+// (task0002 AC-5, task0003 Test Notes).
+func shouldRetryMapRefit(allocatedWidth, attempt int) bool {
+	return allocatedWidth <= 0 && attempt < maxMapRefitRetries
 }
 
 // present runs the pre-map fit (preMapFit) and shows the window (FR1, FR5,
@@ -350,14 +389,22 @@ func (f *frame) preMapFit() {
 // configured width exists (configuredWidth <= 0) -- windowWidth (the
 // window's current default width) minus chrome. Never derived from an
 // allocation, which does not exist yet pre-map -- reading one would yield
-// the width-0 degraded packing this function exists to avoid (AC-4). Pure
-// and GUI-free (task plan Test Notes).
+// the width-0 degraded packing this function exists to avoid (AC-4). The
+// result is clamped to minContentWidth (task0003 Fix 2, AC-3): when chrome
+// is as large as or larger than the configured/fallback width, the raw
+// subtraction would be non-positive and re-enter that same forbidden
+// degraded packing at presentation time. Pure and GUI-free (task plan Test
+// Notes).
 func deriveContentWidth(configuredWidth, windowWidth, chrome int) int {
 	base := configuredWidth
 	if base <= 0 {
 		base = windowWidth
 	}
-	return base - chrome
+	width := base - chrome
+	if width < minContentWidth {
+		width = minContentWidth
+	}
+	return width
 }
 
 // refit resizes the window's height to fit the root box's current natural
