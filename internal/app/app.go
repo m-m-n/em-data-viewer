@@ -57,6 +57,29 @@ func applyKeepAbove(u UI, enabled bool) {
 	}
 }
 
+// PresenterUI is the app layer's view of the ui layer's first-presentation
+// apply surface (ui.UI.Present, task0002's contract per IMPLEMENTATION.md
+// Shared Components: "the ui layer presents the window at a fitted size").
+// Declared separately from UI and detected via a type assertion
+// (applyPresent) rather than a direct call, mirroring KeepAboveUI /
+// applyKeepAbove above: *ui.UI does not implement this method yet in this
+// worktree (task0002 has not merged), and UI's existing satisfaction by
+// *ui.UI in New() must keep compiling independently of task ordering
+// (worktree independence). Once ui.UI gains Present for real, applyPresent
+// starts calling it with no further change needed here.
+type PresenterUI interface {
+	Present()
+}
+
+// applyPresent calls u.Present() when u implements PresenterUI, and is a
+// no-op otherwise (AC-8). It is the single call site the startup gate's
+// ready callback routes through (see onGateReady below).
+func applyPresent(u UI) {
+	if p, ok := u.(PresenterUI); ok {
+		p.Present()
+	}
+}
+
 // KeepAboveWriter persists the keep-above toggle to the config file;
 // config.UpdateKeepAbove (task0001) satisfies it. Declared as a function
 // type -- the same seam style as dispatch func(func()) below -- so this
@@ -113,6 +136,7 @@ type App struct {
 	store          *sectionStore
 	generations    *generationTracker
 	writeKeepAbove KeepAboveWriter
+	gate           *startupGate
 
 	triggers chan struct{}
 	done     chan struct{}
@@ -145,7 +169,19 @@ func New(configPath string) *App {
 		done:           make(chan struct{}),
 	}
 	a.ui = ui.New(a.Quit, a.onKeepAboveToggle)
+	a.gate = newStartupGate(a.onGateReady, startupReadyTimeout)
 	return a
+}
+
+// onGateReady is the startup gate's ready callback (task plan Design step
+// 3): dispatches the presenter request onto the GTK main loop through the
+// same dispatch seam used for every other main-loop callback, so the FIFO
+// ordering guarantee (IMPLEMENTATION.md decision 2, AC-7) holds without this
+// callback needing to know anything about GTK itself.
+func (a *App) onGateReady() {
+	dispatchOnMainLoop(func() {
+		applyPresent(a.ui)
+	})
 }
 
 // onKeepAboveToggle is the method form of handleKeepAboveToggle, wired to
@@ -211,7 +247,7 @@ func (a *App) reloadLoop() {
 		select {
 		case <-a.triggers:
 			gen := a.generations.next()
-			reload(a.configPath, a.holder, a.runner, a.store, gen, a.generations, a.ui, dispatchOnMainLoop)
+			reload(a.configPath, a.holder, a.runner, a.store, gen, a.generations, a.ui, dispatchOnMainLoop, a.gate)
 		case <-a.done:
 			return
 		}
@@ -230,7 +266,7 @@ func (a *App) watchLoop() {
 // was called), translating and dispatching each one onto the GTK main loop
 // (NFR2: no direct cross-goroutine GTK access).
 func (a *App) eventLoop() {
-	consumeEvents(a.runner.Events(), a.runner.Snapshot, a.ui, a.store, dispatchOnMainLoop)
+	consumeEvents(a.runner.Events(), a.runner.Snapshot, a.ui, a.store, dispatchOnMainLoop, a.gate.markReceived)
 }
 
 // dispatchOnMainLoop schedules fn to run once on the GTK main loop.

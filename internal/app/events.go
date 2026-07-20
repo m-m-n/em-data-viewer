@@ -126,7 +126,20 @@ type pendingSection struct {
 // rendered at least once before a later event for the same section takes
 // its place (AC-2), while bounding the pending state to a small constant
 // per section.
-func consumeEvents(events <-chan runner.Event, snapshot func(key string) []string, u UI, store *sectionStore, dispatch func(func())) {
+//
+// markReceived notifies the startup readiness gate (gate.go) of a
+// section's first-ever received event, regardless of kind (startup-window-fit
+// task0001 FR2, AC-2, AC-3): called once per section key, at receive time
+// -- inside the branch that creates that key's first pendingSection entry,
+// immediately AFTER scheduleDispatch(key) queues that event's UI update.
+// Because dispatch's callback queue is FIFO (glib.IdleAdd in production), a
+// gate.markReceived call that completes the gate and, in turn, dispatches
+// the present request, always queues that request strictly after the
+// completing section's own UI-update dispatch call (IMPLEMENTATION.md
+// decision 2, AC-7). Coalesced (non-first) events for an already-pending
+// key skip this call: markReceived is idempotent, but only a section's
+// first event is meaningful to the gate.
+func consumeEvents(events <-chan runner.Event, snapshot func(key string) []string, u UI, store *sectionStore, dispatch func(func()), markReceived func(key string)) {
 	var mu sync.Mutex
 	pending := make(map[string]*pendingSection)
 
@@ -170,6 +183,7 @@ func consumeEvents(events <-chan runner.Event, snapshot func(key string) []strin
 			pending[ev.SectionKey] = &pendingSection{current: ev}
 			mu.Unlock()
 			scheduleDispatch(ev.SectionKey)
+			markReceived(ev.SectionKey)
 			continue
 		}
 		if p.current.Kind == runner.KindError {
