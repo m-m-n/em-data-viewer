@@ -1,0 +1,83 @@
+schema_version: 1
+feature: app-id-desktop-match
+created: 2026-07-20
+base_branch: main
+parent_branch: em-workflow/app-id-desktop-match/integration
+
+project:
+  license: MIT
+  components:
+    main:
+      language: go
+      build_command: "make build"
+      test_command: "make test"
+      format_command: "gofmt -l -w ."
+      e2e_test_command: "make dpkg"
+
+workflow:
+  - id: create-spec
+    artifacts: [REQUIREMENTS.md, SPEC.md]
+    status: completed
+    completed_at_commit: 0a10244d12c2d0a93c3521b4d5a04b350a7dcde4
+  - id: design
+    artifacts: [DESIGN.md, design/]
+    status: skipped
+    skipped_reason: "新しい見た目はない（識別子とファイル名の変更のみで、アイコンのビジュアルは app-icon の DESIGN.md のまま）"
+  - id: create-plan
+    artifacts: [IMPLEMENTATION.md, VERIFICATION.md, tasks/]
+    status: completed
+    completed_at_commit: 0a10244d12c2d0a93c3521b4d5a04b350a7dcde4
+  - id: implement
+    status: pending
+  - id: review
+    status: pending
+  - id: verify
+    status: pending
+    result: null
+    failed_items: []
+  - id: retrospect
+    status: pending
+
+tasks:
+  task0001:
+    title: "Rename application ID and .desktop filename"
+    plan: tasks/task0001.md
+    files:
+      - internal/ui/ui.go
+      - Makefile
+    skills: [infra-impl]
+    domains: [config-infra, ui]
+    complexity: low
+    requirements: [FR1, FR2, NFR1, NFR2]
+    status: pending
+    notes: null
+
+review:
+  status: pending
+  rounds_completed: 0
+
+requirements:
+  FR1:
+    title: "Application ID becomes io.github.m_m_n.EmDataViewer"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-1, TS-2]
+  FR2:
+    title: ".desktop shipped as io.github.m_m_n.EmDataViewer.desktop, content unchanged"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-3, TS-4]
+  NFR1:
+    title: "Icon name em-data-viewer unchanged everywhere"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-6]
+  NFR2:
+    title: "deb payload otherwise unchanged; upgrade replaces old .desktop"
+    status: ok
+    tbd_reason: null
+    tasks: [task0001]
+    tests: [TS-5]
