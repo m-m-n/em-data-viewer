@@ -86,6 +86,21 @@ func (c *capturingDispatch) dispatch(fn func()) {
 	c.calls = append(c.calls, fn)
 }
 
+// noopGate returns a startupGate with a very long timeout, suitable for the
+// many pre-existing applyConfig/reload call sites below that predate the
+// startup-window-fit task0001 gate and do not exercise its behavior
+// themselves; startup-window-fit-specific gate tests live in gate_test.go
+// and construct their own gate directly.
+func noopGate() *startupGate {
+	return newStartupGate(func() {}, time.Hour)
+}
+
+// noopMarkReceived stands in for the gate's markReceived for the many
+// pre-existing consumeEvents call sites below that predate the
+// startup-window-fit task0001 gate wiring; gate-integration tests
+// (AC-2/AC-3/AC-7) live in gate_test.go and pass a real gate's markReceived.
+func noopMarkReceived(string) {}
+
 // --- AC-1: config path resolution ---
 
 // TestResolveConfigPath references AC-1.
@@ -137,7 +152,7 @@ func TestApplyConfig_SuccessAppliesWindowSectionsAndRunner(t *testing.T) {
 	store := newSectionStore()
 	gens := newGenerationTracker()
 
-	applyConfig(cfg, nil, r, store, gens.next(), gens, u, syncDispatch)
+	applyConfig(cfg, nil, r, store, gens.next(), gens, u, syncDispatch, noopGate())
 
 	if len(u.configErrors) != 1 || u.configErrors[0] != "" {
 		t.Fatalf("configErrors = %v, want a single cleared banner", u.configErrors)
@@ -183,13 +198,13 @@ func TestApplyConfig_FailureSetsBannerOnlyAndLeavesEverythingElseUnchanged(t *te
 
 	// Establish a baseline successful state first, mirroring a reload that
 	// later fails; the failure must change nothing beyond the banner.
-	applyConfig(sampleConfig(), nil, r, store, gens.next(), gens, u, syncDispatch)
+	applyConfig(sampleConfig(), nil, r, store, gens.next(), gens, u, syncDispatch, noopGate())
 	windowCallsBefore := len(u.windowSettings)
 	sectionCallsBefore := len(u.sections)
 	applyCallsBefore := len(r.applyCalls)
 
 	loadErr := errors.New("config: parse boom")
-	applyConfig(config.Config{}, loadErr, r, store, gens.next(), gens, u, syncDispatch)
+	applyConfig(config.Config{}, loadErr, r, store, gens.next(), gens, u, syncDispatch, noopGate())
 
 	if len(u.configErrors) != 2 || u.configErrors[1] != loadErr.Error() {
 		t.Fatalf("configErrors = %v, want banner set to %q", u.configErrors, loadErr.Error())
@@ -214,7 +229,7 @@ func TestApplyConfig_StartupFailureOnlySetsBanner(t *testing.T) {
 	store := newSectionStore()
 	gens := newGenerationTracker()
 
-	applyConfig(config.Config{}, errors.New("boom"), r, store, gens.next(), gens, u, syncDispatch)
+	applyConfig(config.Config{}, errors.New("boom"), r, store, gens.next(), gens, u, syncDispatch, noopGate())
 
 	if len(u.configErrors) != 1 || u.configErrors[0] != "boom" {
 		t.Fatalf("configErrors = %v, want [\"boom\"]", u.configErrors)
@@ -245,7 +260,7 @@ func TestApplyConfig_RehydratesFromStoreAfterSetSections(t *testing.T) {
 	r := &fakeRunner{} // snapshots left nil: proves rehydration does not depend on Runner.Snapshot
 	gens := newGenerationTracker()
 
-	applyConfig(cfg, nil, r, store, gens.next(), gens, u, syncDispatch)
+	applyConfig(cfg, nil, r, store, gens.next(), gens, u, syncDispatch, noopGate())
 
 	want := []sectionUpdate{
 		{key: intervalKey, markup: "<b>12:00:00</b>", isError: false},
@@ -266,7 +281,7 @@ func TestApplyConfig_NoRehydrationWhenStoreHasNoRecordedState(t *testing.T) {
 	store := newSectionStore()
 	gens := newGenerationTracker()
 
-	applyConfig(cfg, nil, r, store, gens.next(), gens, u, syncDispatch)
+	applyConfig(cfg, nil, r, store, gens.next(), gens, u, syncDispatch, noopGate())
 
 	if len(u.updates) != 0 {
 		t.Errorf("updates = %+v, want none (store has no recorded state for any section)", u.updates)
@@ -357,7 +372,7 @@ func TestApplyConfig_BreakEntryExcludedFromRunnerButKeptInSetSections(t *testing
 	store := newSectionStore()
 	gens := newGenerationTracker()
 
-	applyConfig(cfg, nil, r, store, gens.next(), gens, u, syncDispatch)
+	applyConfig(cfg, nil, r, store, gens.next(), gens, u, syncDispatch, noopGate())
 
 	if len(r.applyCalls) != 1 || len(r.applyCalls[0]) != 2 {
 		t.Fatalf("runner.Apply got %+v, want exactly 2 sections (break excluded)", r.applyCalls)
@@ -385,7 +400,7 @@ func TestApplyConfig_RunnerReconcileHappensBeforeUIDispatch(t *testing.T) {
 	gens := newGenerationTracker()
 	capture := &capturingDispatch{}
 
-	applyConfig(cfg, nil, r, store, gens.next(), gens, u, capture.dispatch)
+	applyConfig(cfg, nil, r, store, gens.next(), gens, u, capture.dispatch, noopGate())
 
 	if len(r.applyCalls) != 1 {
 		t.Fatalf("runner.Apply calls = %d, want 1 (reconcile must not wait for dispatch)", len(r.applyCalls))
@@ -414,7 +429,7 @@ func TestApplyConfig_FailurePathOnlyDispatchesTheBanner(t *testing.T) {
 	gens := newGenerationTracker()
 	capture := &capturingDispatch{}
 
-	applyConfig(config.Config{}, errors.New("boom"), r, store, gens.next(), gens, u, capture.dispatch)
+	applyConfig(config.Config{}, errors.New("boom"), r, store, gens.next(), gens, u, capture.dispatch, noopGate())
 
 	if len(u.configErrors) != 0 {
 		t.Fatalf("configErrors = %v before dispatch ran, want none", u.configErrors)
@@ -444,7 +459,7 @@ func TestApplyConfig_DispatchesSetKeepAboveWithConfigValue(t *testing.T) {
 	store := newSectionStore()
 	gens := newGenerationTracker()
 
-	applyConfig(cfg, nil, r, store, gens.next(), gens, u, syncDispatch)
+	applyConfig(cfg, nil, r, store, gens.next(), gens, u, syncDispatch, noopGate())
 
 	if !reflect.DeepEqual(u.keepAboveCalls, []bool{true}) {
 		t.Fatalf("keepAboveCalls = %v, want [true]", u.keepAboveCalls)
@@ -465,7 +480,7 @@ func TestApplyConfig_KeepAboveFailurePathDoesNotCallSetKeepAbove(t *testing.T) {
 	store := newSectionStore()
 	gens := newGenerationTracker()
 
-	applyConfig(config.Config{}, errors.New("boom"), r, store, gens.next(), gens, u, syncDispatch)
+	applyConfig(config.Config{}, errors.New("boom"), r, store, gens.next(), gens, u, syncDispatch, noopGate())
 
 	if len(u.keepAboveCalls) != 0 {
 		t.Errorf("keepAboveCalls = %v, want none (load failure leaves keep_above untouched)", u.keepAboveCalls)
@@ -487,8 +502,8 @@ func TestApplyConfig_ReloadWithUnchangedKeepAboveValueIsIdempotent(t *testing.T)
 	store := newSectionStore()
 	gens := newGenerationTracker()
 
-	applyConfig(cfg, nil, r, store, gens.next(), gens, u, syncDispatch)
-	applyConfig(cfg, nil, r, store, gens.next(), gens, u, syncDispatch)
+	applyConfig(cfg, nil, r, store, gens.next(), gens, u, syncDispatch, noopGate())
+	applyConfig(cfg, nil, r, store, gens.next(), gens, u, syncDispatch, noopGate())
 
 	if !reflect.DeepEqual(u.keepAboveCalls, []bool{true, true}) {
 		t.Errorf("keepAboveCalls = %v, want [true true] (same value applied both reloads, no churn)", u.keepAboveCalls)
@@ -614,8 +629,8 @@ func TestApplyConfig_StaleGenerationDoesNotOverwriteNewer(t *testing.T) {
 	newGen := gens.next()
 
 	var oldCB, newCB func()
-	applyConfig(oldCfg, nil, r, store, oldGen, gens, u, func(fn func()) { oldCB = fn })
-	applyConfig(newCfg, nil, r, store, newGen, gens, u, func(fn func()) { newCB = fn })
+	applyConfig(oldCfg, nil, r, store, oldGen, gens, u, func(fn func()) { oldCB = fn }, noopGate())
+	applyConfig(newCfg, nil, r, store, newGen, gens, u, func(fn func()) { newCB = fn }, noopGate())
 
 	// The newer reload's callback happens to run first.
 	newCB()
@@ -678,7 +693,7 @@ func TestReload_UsesHolderAsAuthoritativeSource(t *testing.T) {
 	gens := newGenerationTracker()
 
 	var captured func()
-	reload(path, holder, r, store, gens.next(), gens, u, func(fn func()) { captured = fn })
+	reload(path, holder, r, store, gens.next(), gens, u, func(fn func()) { captured = fn }, noopGate())
 	captured()
 
 	if err := holder.Err(); err != nil {
@@ -704,7 +719,7 @@ func TestReload_FailedLoadSetsBannerFromHolderError(t *testing.T) {
 	gens := newGenerationTracker()
 
 	var captured func()
-	reload(path, holder, r, store, gens.next(), gens, u, func(fn func()) { captured = fn })
+	reload(path, holder, r, store, gens.next(), gens, u, func(fn func()) { captured = fn }, noopGate())
 	captured()
 
 	if holder.Err() == nil {
@@ -880,7 +895,7 @@ func TestConsumeEvents_DispatchesTranslatedUpdates(t *testing.T) {
 		fn()
 	}
 
-	consumeEvents(events, snapshot, u, store, countingDispatch)
+	consumeEvents(events, snapshot, u, store, countingDispatch, noopMarkReceived)
 
 	if dispatchCount != 2 {
 		t.Fatalf("dispatch called %d times, want 2", dispatchCount)
@@ -905,7 +920,7 @@ func TestConsumeEvents_WritesToStore(t *testing.T) {
 	u := &fakeUI{}
 	store := newSectionStore()
 
-	consumeEvents(events, func(string) []string { return nil }, u, store, syncDispatch)
+	consumeEvents(events, func(string) []string { return nil }, u, store, syncDispatch, noopMarkReceived)
 
 	st, ok := store.get("clock-key")
 	if !ok || st.text != "12:00" || st.isError {
@@ -929,7 +944,7 @@ func TestConsumeEvents_ErrorIsRenderedBeforeALaterSuccessTakesItsPlace(t *testin
 	store := newSectionStore()
 	capture := &capturingDispatch{}
 
-	consumeEvents(events, func(string) []string { return nil }, u, store, capture.dispatch)
+	consumeEvents(events, func(string) []string { return nil }, u, store, capture.dispatch, noopMarkReceived)
 
 	if len(capture.calls) != 1 {
 		t.Fatalf("dispatch calls after both events received = %d, want 1 (error still pending; success queued behind it, not a second callback yet)", len(capture.calls))
@@ -972,7 +987,7 @@ func TestConsumeEvents_SuccessEventsCoalesceIntoOneCallback(t *testing.T) {
 	store := newSectionStore()
 	capture := &capturingDispatch{}
 
-	consumeEvents(events, func(string) []string { return nil }, u, store, capture.dispatch)
+	consumeEvents(events, func(string) []string { return nil }, u, store, capture.dispatch, noopMarkReceived)
 
 	if len(capture.calls) != 1 {
 		t.Fatalf("dispatch calls = %d, want 1 (three same-section events coalesce)", len(capture.calls))
@@ -1009,7 +1024,7 @@ func TestConsumeEvents_RendersOnlyAtDispatchTime(t *testing.T) {
 		return []string{"line one", "line two", "line three"}
 	}
 
-	consumeEvents(events, snapshot, u, store, capture.dispatch)
+	consumeEvents(events, snapshot, u, store, capture.dispatch, noopMarkReceived)
 
 	if snapshotCalls != 0 {
 		t.Fatalf("snapshot called %d times before any dispatch callback ran, want 0 (render must not happen at receive time)", snapshotCalls)

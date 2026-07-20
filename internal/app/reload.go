@@ -59,10 +59,10 @@ func (g *generationTracker) markApplied(gen uint64) bool {
 // immediately after (its Config/Err, not the local load result), so it is
 // never a write-only duplicate (AC-6). The rest of the work is delegated
 // to applyConfig.
-func reload(path string, holder *config.Holder, r Runner, store *sectionStore, gen uint64, gens *generationTracker, u UI, dispatch func(func())) {
+func reload(path string, holder *config.Holder, r Runner, store *sectionStore, gen uint64, gens *generationTracker, u UI, dispatch func(func()), gate *startupGate) {
 	cfg, err := config.Load(path)
 	holder.Update(cfg, err)
-	applyConfig(holder.Config(), holder.Err(), r, store, gen, gens, u, dispatch)
+	applyConfig(holder.Config(), holder.Err(), r, store, gen, gens, u, dispatch, gate)
 }
 
 // applyConfig translates one load outcome into runner/UI side effects
@@ -79,7 +79,21 @@ func reload(path string, holder *config.Holder, r Runner, store *sectionStore, g
 // deliberate no-op at the UI layer rather than something this function
 // special-cases (window-drag-keep-above AC-4, Design: "must be a no-op
 // visually").
-func applyConfig(cfg config.Config, err error, r Runner, store *sectionStore, gen uint64, gens *generationTracker, u UI, dispatch func(func())) {
+//
+// gate wiring (startup-window-fit task0001 Design, "Wiring flow" step 1):
+// on failure, gate.fireNow() requests an immediate presentation (FR4) --
+// only the FIRST call across the gate's lifetime (arm or fireNow) has any
+// effect, so a failure on a later reload, after the gate has already been
+// armed or fired once, is a no-op (IMPLEMENTATION.md decision 4). On
+// success, gate.arm() arms the gate with the reconciled section keys;
+// arming with zero keys (a zero-section config) fires immediately inside
+// arm itself (FR4), so this function does not special-case that count. In
+// both branches, the gate call happens AFTER dispatch has already queued
+// this reload's own UI projection, so if the gate fires synchronously and
+// dispatches a present request, that request is queued strictly after the
+// projection it depends on (the FIFO ordering guarantee AC-7 relies on for
+// the runner-event path applies here too, for the immediate-fire path).
+func applyConfig(cfg config.Config, err error, r Runner, store *sectionStore, gen uint64, gens *generationTracker, u UI, dispatch func(func()), gate *startupGate) {
 	if err != nil {
 		dispatch(func() {
 			if !gens.markApplied(gen) {
@@ -87,6 +101,7 @@ func applyConfig(cfg config.Config, err error, r Runner, store *sectionStore, ge
 			}
 			u.SetConfigError(err.Error())
 		})
+		gate.fireNow()
 		return
 	}
 
@@ -110,6 +125,24 @@ func applyConfig(cfg config.Config, err error, r Runner, store *sectionStore, ge
 			u.UpdateSection(rh.key, rh.text, rh.isError)
 		}
 	})
+
+	gate.arm(sectionKeys(cfg.Sections))
+}
+
+// sectionKeys returns the key of every non-break section in sections
+// (startup-window-fit task0001 Design step 1): the key set the startup
+// readiness gate is armed with, since only sections that actually run a
+// process and emit runner events can ever satisfy it -- a break entry never
+// does (mirrors runnerSections' filtering).
+func sectionKeys(sections []config.SectionConfig) []string {
+	out := make([]string, 0, len(sections))
+	for _, s := range sections {
+		if s.IsBreak {
+			continue
+		}
+		out = append(out, s.Key())
+	}
+	return out
 }
 
 // sectionRehydration is one section's presentation-store state to
