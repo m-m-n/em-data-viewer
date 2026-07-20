@@ -53,9 +53,10 @@ block the whole widget.
 ### Functional Requirements
 
 - **FR1:** Defer the window's first `Present()` until either (a) every
-  section's first data has been received, or (b) 1 second has elapsed since
-  startup — whichever comes first. While deferred, the window must not be
-  shown in any form (no map, no taskbar/dock presence).
+  section's first data has been received, or (b) the fixed 1-second timeout
+  has elapsed, measured from when the first successful config application
+  arms the readiness gate — whichever comes first. While deferred, the
+  window must not be shown in any form (no map, no taskbar/dock presence).
 - **FR2:** First-data semantics: an interval section counts as received on
   its first run's result event (replace or error); a stream section counts as
   received on its first event (append or error). Error events count as
@@ -68,12 +69,14 @@ block the whole widget.
 - **FR4:** When the initial config load fails (error-banner-only state) or
   the config has zero sections, present immediately without waiting.
 - **FR5:** The height applied at presentation must be computed from the real
-  row-packed layout at the configured width. The width-0 degraded layout
-  (one section per row) must never be the layout from which a presented
-  window's height was finalized. Refit must be guaranteed to run against a
-  settled allocation; the concrete settlement-detection mechanism (surface
-  layout signal / idle re-arm / container size observation) is an
-  implementation-phase decision.
+  row-packed layout at the content width derived from the configured window
+  width (GTK provides no allocation before the window is mapped, so the
+  pre-presentation fit must not depend on one; the derived content width
+  must always be positive). The width-0 degraded layout (one section per
+  row) must never be the layout from which a presented window's height was
+  finalized. After presentation, the allocation-driven refit path remains as
+  a safety net: its map-time trigger re-arms (bounded, without busy-spinning
+  the main loop) until an allocation exists instead of no-oping permanently.
 
 ### Non-Functional Requirements
 
@@ -101,14 +104,15 @@ App.Run ─▶ reload ─▶ runner.Apply (first runs start)
         └▶ ui.Run ─▶ activate ─▶ newFrame (window built, NOT presented)
 events ─▶ UpdateSection (widgets fill in, window still hidden)
 gate: all sections received first data (FR2)  OR  1s timeout (FR3)
-  └▶ ensure allocation-settled reflow+refit has produced the fitted size (FR5)
+  └▶ pre-map fit: row-pack at the width derived from the configured width (FR5)
       └▶ win.Present()   ← single presentation at final size
 ```
 
 The gate needs both conditions resolved in order: data-complete (or timeout)
-first, then a settled-allocation refit, then Present. The app layer owns the
-readiness/timeout accounting (GUI-free); the ui layer owns the
-allocation-settled refit and the deferred Present.
+first, then the width-derived pre-map fit, then Present. The app layer owns
+the readiness/timeout accounting (GUI-free); the ui layer owns the pre-map
+fit and the deferred Present. After presentation, the existing
+allocation-driven refit triggers keep the window in sync (safety net).
 
 ### Dependencies
 
@@ -137,7 +141,8 @@ internal/
 - [ ] Readiness gate: all sections received → ready fires once.
 - [ ] Readiness gate: error event counts as received (FR2).
 - [ ] Readiness gate: stream section's first append counts as received (FR2).
-- [ ] Timeout path: gate reports timeout with pending sections listed (FR3).
+- [ ] Timeout path: the gate fires at the injected timeout while sections
+      are still owed (FR3).
 - [ ] Zero sections / config error → immediate-present decision (FR4).
 - [ ] Late-arriving data after timeout routes through the normal update path.
 

@@ -1,0 +1,169 @@
+round: 1
+executed_at: "2026-07-20T20:35:00+09:00"
+scope:
+  review_mode: diff
+  base_commit: eff960954efcab280cd30f26defd9ea7f0b5ba84
+  head_commit: bbb66045702268f2c1f1af321ccfaa941fb4ab3a
+  changed_files:
+    - internal/app/app.go
+    - internal/app/app_test.go
+    - internal/app/events.go
+    - internal/app/gate.go
+    - internal/app/gate_test.go
+    - internal/app/reload.go
+    - internal/ui/fit_test.go
+    - internal/ui/sections.go
+    - internal/ui/ui.go
+    - internal/ui/window.go
+    - internal/ui/window_test.go
+plan:
+  floor: [comprehensive, performance, architecture, spec]
+  discretionary: []
+  codex_cross_validation: true
+perspective_runs:
+  - {perspective: comprehensive, source: claude, status: completed}
+  - {perspective: performance, source: claude, status: completed}
+  - {perspective: performance, source: codex, status: completed}
+  - {perspective: architecture, source: claude, status: completed}
+  - {perspective: architecture, source: codex, status: completed}
+  - {perspective: spec, source: claude, status: completed}
+  - {perspective: spec, source: codex, status: completed}
+findings:
+  - stable_id: 3b93f2acf0fd701d
+    severity: medium
+    category: performance
+    file: internal/ui/window.go
+    line: 292
+    title: "mapReflowAndRefit の自己再アームがバックオフ・回数上限なしのアイドルスピンになりうる"
+    description: "mapReflowAndRefit は AllocatedWidth <= 0 の間 glib.IdleAdd で自分自身を無条件再スケジュールする。バックオフも再試行上限も unmap/destroy でのキャンセルもないため、アロケーションが非正のまま安定する縮退ケース（幅0相当のジオメトリ等）で GLib メインループがアイドルソースを連続ディスパッチし続け CPU を専有するビジースピンになりうる。"
+    suggestion: "再試行に上限またはバックオフ（TimeoutAdd 等）を設け、上限到達後は諦める。present/preMapFit で既に fitted 済みのためこのパスは安全網であり、無期限スピンを避ける上限側に倒してよい。"
+    sources: [claude:performance, codex:performance]
+    confidence: 95
+    resolution: unresolved
+    resolution_reason: "rework (task0003) で修正予定"
+  - stable_id: f78c485ec1383324
+    severity: medium
+    category: performance
+    file: internal/app/reload.go
+    line: 129
+    title: "Fast initial events can force the full startup timeout"
+    description: "gate は r.Apply が全セクションプロセスを起動した後にのみ arm される。その間に速いコマンドの初回イベントが markReceived に渡ると owed 集合が空のため無視され、初回データが届いているのに startupReadyTimeout の 1 秒をフルに待つ起動遅延が生じうる。"
+    suggestion: "arm 前に受領したイベントを保持し、arm 時に owed 集合から差し引く。"
+    sources: [codex:performance]
+    confidence: 65
+    resolution: unresolved
+    resolution_reason: "rework (task0003) で修正予定"
+  - stable_id: 9aef0f0861f8caa8
+    severity: medium
+    category: comprehensive
+    file: internal/app/reload.go
+    line: 108
+    title: "Gate is armed after the runner (event source) is started, so an early first event can be dropped"
+    description: "applyConfig の成功パスで r.Apply(line 108) がランナーを起動しイベント発行が始まるが、gate.arm(line 129) はその後。eventLoop が arm 前に初回イベントを markReceived すると受領が失われ、該当セクションの再発行か 1s タイムアウトまで表示が遅れる。構造上のレース（ソース起動後にシンクを arm、pre-arm マークのバッファなし）。"
+    suggestion: "owed キー集合の登録を r.Apply より前に行うか、gate に pre-arm 受領バッファを持たせ arm 時に消し込む（後者が変更最小）。"
+    sources: [claude:comprehensive]
+    confidence: 65
+    resolution: unresolved
+    resolution_reason: "rework (task0003) で修正予定"
+  - stable_id: b690fe0ec7573b25
+    severity: high
+    category: spec
+    file: internal/app/reload.go
+    line: 129
+    title: "The gate is armed after first events can already be consumed"
+    description: "SPEC FR1 は全初回データ到着後すみやかな表示を要求し FR2 が初回データを定義するが、r.Apply がセクション goroutine を起動した後 line 129 まで gate が arm されない。速いコマンドのイベントが owed 空の markReceived に無視され、初回データが揃っていても表示がタイムアウトまで遅延しうる。"
+    suggestion: "イベントが消費されうる前に gate を arm するか、pre-arm 受領を保持して arm 時に整合させる。"
+    sources: [codex:spec]
+    confidence: 65
+    resolution: unresolved
+    resolution_reason: "rework (task0003) で修正予定"
+  - stable_id: 4589d8a8b6d4a872
+    severity: high
+    category: spec
+    file: internal/ui/window.go
+    line: 314
+    title: "Presentation occurs before an allocation-settled refit"
+    description: "旧 SPEC の Target flow 文言（Present 前に allocation-settled reflow+refit）と、pre-map 見積もりで即 Present する実装の齟齬の指摘。"
+    suggestion: "Present を allocation 確定後まで遅らせる。"
+    sources: [codex:spec]
+    confidence: 50
+    resolution: declined
+    resolution_reason: "GTK では map 前に allocation が存在せず、Present 前の allocation 待ちは物理的に成立しない。幅導出方式は IMPLEMENTATION.md 設計判断3 として文書化された採用設計であり、仕様意図（一発表示・縮退排除）は満たされている。SPEC の Target flow / FR5 文言を実装設計に合わせて更新済み。"
+  - stable_id: a4ca638691b48386
+    severity: medium
+    category: spec
+    file: internal/ui/window.go
+    line: 355
+    title: "Derived content width can enter the forbidden zero-width layout"
+    description: "deriveContentWidth が base - chrome を正値保証なしで返す。設定幅が chrome 以下の場合 reflowAt に非正幅が渡り、FR5 が禁止する幅0縮退パッキングが表示前フィットで起こりうる（実装確認済み: window.go:355-361 にガードなし）。"
+    suggestion: "導出結果を正値に clamp する。"
+    sources: [codex:spec]
+    confidence: 50
+    resolution: unresolved
+    resolution_reason: "rework (task0003) で修正予定"
+  - stable_id: 883ae98b0938e458
+    severity: medium
+    category: spec
+    file: internal/app/gate.go
+    line: 64
+    title: "The one-second deadline starts after startup work"
+    description: "旧 SPEC FR1 の「起動から1秒」に対し、実装のタイマー起点は arm 時点（config ロード・ランナー起動後）である齟齬の指摘。"
+    suggestion: "App.Run 開始時に起点を取り残余時間で arm する。"
+    sources: [codex:spec]
+    confidence: 50
+    resolution: declined
+    resolution_reason: "起動から arm までの差は数十ms オーダーでユーザー観測不能。SPEC FR1 の文言を「初回 config 適用が gate を arm した時点から」に更新済み。"
+  - stable_id: 8a2f5fde8e131065
+    severity: medium
+    category: spec
+    file: internal/app/gate.go
+    line: 125
+    title: "Timeout does not report the pending section list"
+    description: "旧 SPEC の Unit Test 項目「gate reports timeout with pending sections listed」に対し、callback がパラメータなしで pending 一覧を報告しない齟齬の指摘。"
+    suggestion: "readiness 結果に理由と pending キーを含める。"
+    sources: [codex:spec]
+    confidence: 50
+    resolution: declined
+    resolution_reason: "SPEC 側の実装過剰指定。pending セクションは UI 側で自然に空表示となり gate からの報告用途がない。SPEC のテスト項目文言を更新済み。"
+  - stable_id: 22339b4c67da299b
+    severity: medium
+    category: architecture
+    file: internal/app/gate.go
+    line: 95
+    title: "Startup gate drops readiness events received before arming"
+    description: "markReceived は owed に無いキーを破棄する。reload ループとイベントループは並行で、applyConfig は r.Apply の後に gate.arm するため、arm 前の初回イベント受領が恒久的に失われる。独立に動くコンポーネント間の順序依存を gate プロトコルが表現していない。"
+    suggestion: "pre-arm 受領を保持して arm 時に整合させ、readiness プロトコルを順序非依存にする。event-before-arm の統合テストを追加する。"
+    sources: [codex:architecture]
+    confidence: 65
+    resolution: unresolved
+    resolution_reason: "rework (task0003) で修正予定"
+  - stable_id: 116a0f8a7c93d183
+    severity: medium
+    category: architecture
+    file: internal/app/app.go
+    line: 77
+    title: "Required presentation behavior is hidden behind an optional downcast"
+    description: "Present は起動ゲートがウィンドウを表示する唯一の経路だが、app 層 UI インターフェースの必須メソッドではなく PresenterUI への型アサーションで任意能力化されている。Present を欠く実装がコンパイルを通り、表示されないアプリになりうる。"
+    suggestion: "UI インターフェースに Present を正式追加して直接呼ぶ。"
+    sources: [codex:architecture]
+    confidence: 50
+    resolution: declined
+    resolution_reason: "既存 KeepAboveUI パターンを踏襲した worktree 独立性のための意図的 optional-capability seam（IMPLEMENTATION.md Shared Components に契約記載済み）。プロジェクト慣習として一貫している。"
+  - stable_id: 6ff3de2d6683a663
+    severity: medium
+    category: architecture
+    file: internal/ui/ui.go
+    line: 71
+    title: "Global one-shot presentation state conflicts with per-activation frame creation"
+    description: "activate ハンドラは毎回 u.frame を新規 frame で無条件置換する一方、presented は UI 生涯の one-shot。初回表示後の再 activation（単一インスタンスアプリへの二重起動）で非表示の新 frame に差し替わり、以後の ApplyWindow/SetSections/UpdateSection が非表示 frame へ向かい、可視ウィンドウが放置される退行（実装確認済み: ui.go:71-84）。"
+    suggestion: "u.frame 既存時は再生成せず既存 frame を維持する。再 activation テストを追加する。"
+    sources: [codex:architecture]
+    confidence: 50
+    resolution: unresolved
+    resolution_reason: "rework (task0003) で修正予定"
+auto_fix:
+  loops_run: 0
+  applied_total: 0
+  termination: clean
+residual_critical_high: 1
+rework_required: true

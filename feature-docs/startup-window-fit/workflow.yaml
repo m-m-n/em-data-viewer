@@ -29,6 +29,7 @@ workflow:
     completed_at_commit: eff960954efcab280cd30f26defd9ea7f0b5ba84
   - id: implement
     status: pending
+    base_commit: eff960954efcab280cd30f26defd9ea7f0b5ba84
   - id: review
     status: pending
   - id: verify
@@ -52,8 +53,9 @@ tasks:
     domains: [concurrency, ui]
     complexity: high
     requirements: [FR1, FR2, FR3, FR4, NFR1, NFR2]
-    status: pending
-    notes: null
+    status: merged
+    notes: "deviation: internal/app/app_test.go (expected_files 外) — consumeEvents/applyConfig/reload のシグネチャ変更に伴う既存呼び出し箇所の機械的更新のみ"
+    branch: em-workflow/startup-window-fit/task0001
   task0002:
     title: "Deferred presentation & width-derived fitting (ui layer)"
     plan: tasks/task0002.md
@@ -66,12 +68,39 @@ tasks:
     domains: [ui]
     complexity: high
     requirements: [FR1, FR5, NFR2]
-    status: pending
+    status: merged
     notes: null
+    branch: em-workflow/startup-window-fit/task0002
+  task0003:
+    title: "Review round 1 fixes (gate ordering, width clamp, activation, retry bound)"
+    plan: tasks/task0003.md
+    files:
+      - internal/app/gate.go
+      - internal/app/gate_test.go
+      - internal/ui/ui.go
+      - internal/ui/window.go
+      - internal/ui/fit_test.go
+    skills: [frontend-impl, design-impl]
+    domains: [concurrency, ui]
+    complexity: high
+    requirements: [FR1, FR2, FR5]
+    status: pending
+    notes: "review round 1 rework: findings b690fe0ec7573b25 / f78c485ec1383324 / 9aef0f0861f8caa8 / 22339b4c67da299b / a4ca638691b48386 / 6ff3de2d6683a663 / 3b93f2acf0fd701d"
 
 review:
   status: pending
-  rounds_completed: 0
+  rounds_completed: 1
+  plan:
+    floor: [comprehensive, performance, architecture, spec]
+    discretionary: []
+    codex_cross_validation: true
+  perspectives:
+    comprehensive: completed
+    performance: completed
+    architecture: completed
+    spec: completed
+  residual_critical_high: 1
+  needs_rework: true
 
 requirements:
   FR1:
