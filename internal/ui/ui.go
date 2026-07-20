@@ -46,13 +46,23 @@ type UI struct {
 	app   *gtk.Application
 	quit  func()
 	frame *frame
+
+	// presented records whether Present has already taken effect — the
+	// "first call wins" half of the PresenterUI contract
+	// (IMPLEMENTATION.md Shared Components). presentPending records a
+	// Present call that arrived before the frame existed, so activation
+	// can honor it once the frame is built — the "remembered" half.
+	presented      bool
+	presentPending bool
 }
 
 // New constructs a UI. quit is invoked when the user chooses 終了 from the
 // context menu; onKeepAboveToggle is invoked with the NEW desired value
 // whenever the user toggles the「最前面に固定」menu check item (the caller
 // routes this to SetKeepAbove and to persisting the value, per
-// IMPLEMENTATION.md).
+// IMPLEMENTATION.md). Activation builds the frame but does not show it
+// (FR1, task0002 AC-1): the window is presented only once, on request, via
+// Present.
 func New(quit func(), onKeepAboveToggle func(enabled bool)) *UI {
 	u := &UI{
 		app:  gtk.NewApplication(applicationID, gio.ApplicationFlagsNone),
@@ -65,9 +75,34 @@ func New(quit func(), onKeepAboveToggle func(enabled bool)) *UI {
 		// requests windowIconName (task0001 Design; SPEC FR3).
 		registerIconResources()
 		u.frame = newFrame(u.app, u.requestQuit, onKeepAboveToggle)
-		u.frame.win.Present()
+		if u.presentPending {
+			// A Present call arrived before this handler ran; honor it now
+			// that the frame exists (task0002 AC-2).
+			u.presentPending = false
+			u.presented = true
+			u.frame.present()
+		}
 	})
 	return u
+}
+
+// Present shows the window for the first time, fitted to its final size so
+// no visible resize follows presentation (FR5, US1). Only the first
+// effective call presents; later calls are no-ops (IMPLEMENTATION.md
+// Shared Components: PresenterUI contract). A call arriving before
+// activation has built the GTK frame is remembered and honored once New's
+// activate handler builds it — callers need not know which case applies
+// (task0002 AC-1, AC-2).
+func (u *UI) Present() {
+	if u.presented {
+		return
+	}
+	if u.frame == nil {
+		u.presentPending = true
+		return
+	}
+	u.presented = true
+	u.frame.present()
 }
 
 // requestQuit runs the caller-supplied quit callback and terminates the

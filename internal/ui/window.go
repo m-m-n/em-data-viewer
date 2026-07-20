@@ -119,7 +119,7 @@ func attachReflowTriggers(win *gtk.ApplicationWindow, f *frame) {
 		glib.IdleAdd(f.reflowAndRefit)
 	})
 	win.ConnectMap(func() {
-		glib.IdleAdd(f.reflowAndRefit)
+		glib.IdleAdd(f.mapReflowAndRefit)
 	})
 }
 
@@ -279,9 +279,90 @@ func (f *frame) reflowAndRefit() {
 	f.refit()
 }
 
+// mapReflowAndRefit is the map signal's deferred trigger (task0002 Design:
+// "Steady-state safety net"). task0002 presents the window already fitted
+// (present/preMapFit below), so this path is reached only as a safety net,
+// for the case where the toolkit's first real allocation lands after the
+// idle callback this is scheduled from (attachReflowTriggers) runs. It
+// re-arms itself for a later main-loop iteration while no allocation
+// exists yet, instead of applying (and then permanently no-oping, the way
+// running reflowAndRefit directly here once did) a fit computed from a
+// width that does not exist (AC-5); once an allocation exists it fits
+// exactly once via reflowAndRefit, same as before task0002.
+func (f *frame) mapReflowAndRefit() {
+	if shouldRetryMapRefit(f.root.AllocatedWidth()) {
+		glib.IdleAdd(f.mapReflowAndRefit)
+		return
+	}
+	f.reflowAndRefit()
+}
+
+// shouldRetryMapRefit is mapReflowAndRefit's pure retry decision: true
+// while the content root has no allocation yet, meaning a fit computed now
+// would be the width-0 degraded case refit itself already guards against
+// via its own AllocatedWidth check. Pure and GUI-free so the decision is
+// unit-testable without GTK (task0002 AC-5, Test Notes).
+func shouldRetryMapRefit(allocatedWidth int) bool {
+	return allocatedWidth <= 0
+}
+
+// present runs the pre-map fit (preMapFit) and shows the window (FR1, FR5,
+// US1): the window maps already sized from the real row-packed layout at
+// the configured width, so no visible resize follows presentation. Called
+// at most once, by UI.Present's first-call-wins guard (IMPLEMENTATION.md
+// Shared Components: PresenterUI contract).
+func (f *frame) present() {
+	f.preMapFit()
+	f.win.Present()
+}
+
+// preMapFit sizes the window before it is ever mapped, from a width
+// derived from the configured width rather than from an allocation
+// (task0002 Design "Pre-map fit"; IMPLEMENTATION.md decision 3): GTK
+// allocates widgets only after a window is mapped, so a hidden window can
+// never satisfy "wait for a settled allocation" the way refit does. The
+// derived content width feeds the same explicit-width row-packing seam
+// (sectionsView.reflowAt) and the same height formula (fitHeight) that the
+// post-map, allocation-driven refit uses, so the two computations agree
+// given the same inputs (AC-3). Monitor geometry is unknown before
+// realize, so monitorHeight() returns 0 and no cap applies here, exactly
+// like refit before the window is realized.
+func (f *frame) preMapFit() {
+	chrome := f.windowChromeSize()
+	windowWidth, _ := f.win.DefaultSize()
+	contentWidth := deriveContentWidth(f.settingsWidth, windowWidth, chrome)
+
+	f.sections.reflowAt(contentWidth)
+	_, natural, _, _ := f.root.Measure(gtk.OrientationVertical, contentWidth)
+	target := natural + chrome
+	height := fitHeight(target, minFrameHeight, f.monitorHeight())
+
+	width := f.settingsWidth
+	if width <= 0 {
+		width = windowWidth
+	}
+	f.win.SetDefaultSize(width, height)
+}
+
+// deriveContentWidth computes the content-area width to row-pack sections
+// against before the window has ever been mapped (FR5, IMPLEMENTATION.md
+// decision 3): the configured window width minus chrome, or -- before any
+// configured width exists (configuredWidth <= 0) -- windowWidth (the
+// window's current default width) minus chrome. Never derived from an
+// allocation, which does not exist yet pre-map -- reading one would yield
+// the width-0 degraded packing this function exists to avoid (AC-4). Pure
+// and GUI-free (task plan Test Notes).
+func deriveContentWidth(configuredWidth, windowWidth, chrome int) int {
+	base := configuredWidth
+	if base <= 0 {
+		base = windowWidth
+	}
+	return base - chrome
+}
+
 // refit resizes the window's height to fit the root box's current natural
 // content height (banner + sections) plus the window's own CSS chrome
-// (windowChromeHeight), capped at the monitor height once the window is
+// (windowChromeSize), capped at the monitor height once the window is
 // realized (task0001 Design: "Shrink requirement", "Monitor cap"). The
 // width is re-asserted from the configured value (settingsWidth) at the
 // same time. The minimum frame height (NFR2) is additionally enforced
@@ -298,11 +379,13 @@ func (f *frame) refit() {
 	if contentWidth <= 0 {
 		// Pre-map there is no allocation yet: measuring height-for-width at
 		// 0 makes GTK warn and yields nothing usable. The map signal's
-		// deferred reflowAndRefit re-runs this once a real width exists.
+		// deferred mapReflowAndRefit re-arms until this re-runs against a
+		// real width (AC-5); presentation itself is already fitted via
+		// preMapFit, independently of this early-return.
 		return
 	}
 	_, natural, _, _ := f.root.Measure(gtk.OrientationVertical, contentWidth)
-	target := natural + f.windowChromeHeight()
+	target := natural + f.windowChromeSize()
 	height := fitHeight(target, minFrameHeight, f.monitorHeight())
 
 	// Re-assert the configured width rather than reading it back from the
@@ -315,14 +398,19 @@ func (f *frame) refit() {
 	f.win.SetDefaultSize(width, height)
 }
 
-// windowChromeHeight is the vertical space the frame's own .dv-window CSS
-// box (buildStylesheet/windowCSS) adds above and below its child: padding
-// (the fixed windowPadding token) plus the border (the user-configurable
-// frame-width style value), each counted on both the top and bottom edge.
-// This box sits on f.win itself, outside f.root — outside the content
-// refit measures directly — so it is never included in that measurement
-// and must be added explicitly.
-func (f *frame) windowChromeHeight() int {
+// windowChromeSize is the space the frame's own .dv-window CSS box
+// (buildStylesheet/windowCSS) adds around its child on a single axis:
+// padding (the fixed windowPadding token) plus the border (the
+// user-configurable frame-width style value), each counted on both edges
+// of that axis. Padding and border apply symmetrically to all four edges
+// (windowCSS's "padding: Npx" / "border: Npx solid ..."), so this same
+// value is the chrome contribution on the vertical axis (refit's height
+// target) and on the horizontal axis alike (preMapFit's content-width
+// derivation, task0002 FR5). This box sits on f.win itself, outside
+// f.root — outside the content refit/preMapFit measure directly — so it
+// is never included in that measurement and must be added/subtracted
+// explicitly.
+func (f *frame) windowChromeSize() int {
 	return 2*windowPadding + 2*parsePixelLength(f.windowStyle["frame-width"])
 }
 

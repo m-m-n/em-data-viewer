@@ -90,7 +90,7 @@ func TestWindowIconName_MatchesDesignConstant(t *testing.T) {
 }
 
 // TestParsePixelLength_ReadsBareNumbersAsPixels references task0002 AC-4:
-// refit's chrome-height addition (windowChromeHeight) depends on reading
+// refit's chrome-height addition (windowChromeSize) depends on reading
 // the user-configurable frame-width style value as pixels the same way the
 // rest of this app treats a bare number as pixels (style.go's
 // normalizeLength). New pure helper introduced by task0002 (Test Notes),

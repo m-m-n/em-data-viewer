@@ -163,21 +163,35 @@ func (sv *sectionsView) styleEntries() []sectionStyleEntry {
 // reflow recomputes the row assignment from every section root's natural
 // horizontal width (for_size unconstrained) and the container's currently
 // allocated width, then rebuilds the row widgets only when the assignment
-// actually changed (FR3, FR4, AC-5). sv.breaks (section-row-break task0001
-// FR4) splits the widths into independently packed segments before the
-// usual greedy width packing runs on each; empty otherwise, which makes
-// this identical to plain packRows. Safe to call with zero sections, and
+// actually changed (FR3, FR4, AC-5). Safe to call with zero sections, and
 // before the window has ever been allocated a width (AllocatedWidth is then
 // 0, so width-based packing degrades to one section per row until a later
-// reflow — e.g. the window's map signal — corrects it).
+// reflow — e.g. the window's map signal — corrects it; task0002's
+// preMapFit avoids this case by calling reflowAt directly with a derived,
+// nonzero width instead).
 func (sv *sectionsView) reflow() {
+	sv.reflowAt(sv.widget.AllocatedWidth())
+}
+
+// reflowAt is reflow's explicit-width packing seam (task0002 FR5): the
+// available width to pack against is supplied by the caller instead of
+// always read from the container's allocation, so the pre-map fit path
+// (frame.preMapFit) can pack sections against a width derived from the
+// configured window width before the window has ever been allocated one
+// (AC-4) — reading AllocatedWidth pre-map would yield 0, degrading
+// packRows/packRowsWithBreaks to one section per row. sv.breaks
+// (section-row-break task0001 FR4) splits the widths into independently
+// packed segments before the usual greedy width packing runs on each;
+// empty otherwise, which makes this identical to plain packRows. The row
+// widgets are rebuilt only when the assignment actually changed (AC-5).
+func (sv *sectionsView) reflowAt(avail int) {
 	widths := make([]int, len(sv.order))
 	for i, key := range sv.order {
 		_, natural, _, _ := sv.byKey[key].root.Measure(gtk.OrientationHorizontal, -1)
 		widths[i] = natural
 	}
 
-	assignment := packRowsWithBreaks(widths, sv.breaks, sectionColumnGap, sv.widget.AllocatedWidth())
+	assignment := packRowsWithBreaks(widths, sv.breaks, sectionColumnGap, avail)
 	if assignmentsEqual(assignment, sv.lastAssignment) {
 		return
 	}
