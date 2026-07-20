@@ -1,0 +1,75 @@
+round: 2
+executed_at: "2026-07-20T21:20:00+09:00"
+scope:
+  review_mode: diff
+  base_commit: eff960954efcab280cd30f26defd9ea7f0b5ba84
+  head_commit: 9aa8334fd39c165870eafa978731bf6e00e1235d
+  changed_files:
+    - internal/app/app.go
+    - internal/app/app_test.go
+    - internal/app/events.go
+    - internal/app/gate.go
+    - internal/app/gate_test.go
+    - internal/app/reload.go
+    - internal/ui/fit_test.go
+    - internal/ui/sections.go
+    - internal/ui/ui.go
+    - internal/ui/window.go
+    - internal/ui/window_test.go
+plan:
+  floor: [comprehensive, performance, architecture, spec]
+  discretionary: []
+  codex_cross_validation: true
+perspective_runs:
+  - {perspective: comprehensive, source: claude, status: completed}
+  - {perspective: performance, source: claude, status: completed}
+  - {perspective: performance, source: codex, status: completed}
+  - {perspective: architecture, source: claude, status: completed}
+  - {perspective: architecture, source: codex, status: completed}
+  - {perspective: spec, source: claude, status: completed}
+  - {perspective: spec, source: codex, status: completed}
+round1_verification:
+  note: "round1 の unresolved 7 findings (3b93f2acf0fd701d / f78c485ec1383324 / 9aef0f0861f8caa8 / b690fe0ec7573b25 / a4ca638691b48386 / 22339b4c67da299b / 6ff3de2d6683a663) は task0003 の修正が全レビュアーにより妥当と検証された (round1.yaml 側で fixed に更新)"
+findings:
+  - stable_id: 26b3ce832cd1a156
+    severity: high
+    category: architecture
+    file: internal/app/events.go
+    line: 186
+    title: "Gate readiness can precede successful section projection"
+    description: "pre-arm バッファは readiness シグナルのみを保存し、イベントの UI 効果を保存しない。applyConfig は SetSections の dispatch より先にランナーを起動するため、速いイベントの UpdateSection callback が widget 生成前に main loop で実行されて捨てられ、rehydrationsFor は計算済みの空 store を掴んでいる。バッファされた受領が gate を完了させ、空のセクションで present されうる。「received」が「presentation model に適用済み」を意味しない点で event-before-arm 修正が構造的に不完全。"
+    suggestion: "config projection がセクションを生成するまでイベントをバッファして UpdateSection 成功後に markReceived するか、Runner.Apply がイベントを生みうる前に projection の dispatch を保証する。"
+    sources: [codex:architecture]
+    confidence: 50
+    resolution: unresolved
+    resolution_reason: "rework (task0004) で修正予定: applyConfig の順序変更 (projection dispatch → gate.arm → r.Apply)"
+  - stable_id: 86803c68798485df
+    severity: high
+    category: spec
+    file: internal/app/reload.go
+    line: 108
+    title: "Pre-arm events can still be discarded before presentation"
+    description: "SPEC US1 は「全セクション populated で表示」を要求するが、r.Apply(line 108) が projection queue (116-127) と gate.arm(129) より先。速いイベントが UpdateSection → SetSections → Present の FIFO 順になった場合、sections.go の updateSection は widget 不在で無視し、SetSections が空出力で再構築、受領会計だけ満たされて未反映データのまま present されうる。"
+    suggestion: "SetSections projection が queue されてから r.Apply がイベントを生めるよう順序を保証するか、pre-arm イベントの payload をバッファして projection 後に再適用する。"
+    sources: [codex:spec]
+    confidence: 50
+    resolution: unresolved
+    resolution_reason: "rework (task0004) で修正予定: 同上 (26b3ce832cd1a156 と同一根本原因)"
+  - stable_id: 454d0fb9e0a99942
+    severity: medium
+    category: comprehensive
+    file: internal/ui/ui.go
+    line: 72
+    title: "二重起動時に既存ウィンドウが前面化されなくなった"
+    description: "task0003 の early return (frame 既存時) により、単一インスタンス GApplication への二度目の起動で送られる activate シグナルに何も起きなくなった。修正前は frame 再生成に伴い再 Present され前面化されていた。keep-above 無効環境では再起動でウィンドウを前面に呼び出す操作が無反応になる退行。"
+    suggestion: "early return 分岐で presented 済みの場合のみ既存ウィンドウを再 Present して raise する (gate 未発火の隠れ frame は見せない)。"
+    sources: [claude:comprehensive]
+    confidence: 65
+    resolution: unresolved
+    resolution_reason: "rework (task0004) で修正予定"
+auto_fix:
+  loops_run: 0
+  applied_total: 0
+  termination: clean
+residual_critical_high: 2
+rework_required: true

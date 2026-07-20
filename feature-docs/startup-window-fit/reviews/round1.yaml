@@ -39,8 +39,8 @@ findings:
     suggestion: "再試行に上限またはバックオフ（TimeoutAdd 等）を設け、上限到達後は諦める。present/preMapFit で既に fitted 済みのためこのパスは安全網であり、無期限スピンを避ける上限側に倒してよい。"
     sources: [claude:performance, codex:performance]
     confidence: 95
-    resolution: unresolved
-    resolution_reason: "rework (task0003) で修正予定"
+    resolution: fixed
+    resolution_reason: "task0003 で修正、round 2 で全レビュアーが妥当性を検証済み"
   - stable_id: f78c485ec1383324
     severity: medium
     category: performance
@@ -51,8 +51,8 @@ findings:
     suggestion: "arm 前に受領したイベントを保持し、arm 時に owed 集合から差し引く。"
     sources: [codex:performance]
     confidence: 65
-    resolution: unresolved
-    resolution_reason: "rework (task0003) で修正予定"
+    resolution: fixed
+    resolution_reason: "task0003 で修正、round 2 で全レビュアーが妥当性を検証済み"
   - stable_id: 9aef0f0861f8caa8
     severity: medium
     category: comprehensive
@@ -63,8 +63,8 @@ findings:
     suggestion: "owed キー集合の登録を r.Apply より前に行うか、gate に pre-arm 受領バッファを持たせ arm 時に消し込む（後者が変更最小）。"
     sources: [claude:comprehensive]
     confidence: 65
-    resolution: unresolved
-    resolution_reason: "rework (task0003) で修正予定"
+    resolution: fixed
+    resolution_reason: "task0003 で修正、round 2 で全レビュアーが妥当性を検証済み"
   - stable_id: b690fe0ec7573b25
     severity: high
     category: spec
@@ -75,8 +75,8 @@ findings:
     suggestion: "イベントが消費されうる前に gate を arm するか、pre-arm 受領を保持して arm 時に整合させる。"
     sources: [codex:spec]
     confidence: 65
-    resolution: unresolved
-    resolution_reason: "rework (task0003) で修正予定"
+    resolution: fixed
+    resolution_reason: "task0003 で修正、round 2 で全レビュアーが妥当性を検証済み"
   - stable_id: 4589d8a8b6d4a872
     severity: high
     category: spec
@@ -99,8 +99,8 @@ findings:
     suggestion: "導出結果を正値に clamp する。"
     sources: [codex:spec]
     confidence: 50
-    resolution: unresolved
-    resolution_reason: "rework (task0003) で修正予定"
+    resolution: fixed
+    resolution_reason: "task0003 で修正、round 2 で全レビュアーが妥当性を検証済み"
   - stable_id: 883ae98b0938e458
     severity: medium
     category: spec
@@ -135,8 +135,8 @@ findings:
     suggestion: "pre-arm 受領を保持して arm 時に整合させ、readiness プロトコルを順序非依存にする。event-before-arm の統合テストを追加する。"
     sources: [codex:architecture]
     confidence: 65
-    resolution: unresolved
-    resolution_reason: "rework (task0003) で修正予定"
+    resolution: fixed
+    resolution_reason: "task0003 で修正、round 2 で全レビュアーが妥当性を検証済み"
   - stable_id: 116a0f8a7c93d183
     severity: medium
     category: architecture
@@ -159,8 +159,8 @@ findings:
     suggestion: "u.frame 既存時は再生成せず既存 frame を維持する。再 activation テストを追加する。"
     sources: [codex:architecture]
     confidence: 50
-    resolution: unresolved
-    resolution_reason: "rework (task0003) で修正予定"
+    resolution: fixed
+    resolution_reason: "task0003 で修正、round 2 で全レビュアーが妥当性を検証済み"
 auto_fix:
   loops_run: 0
   applied_total: 0
