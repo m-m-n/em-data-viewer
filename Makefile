@@ -1,4 +1,7 @@
 APP_NAME     := em-data-viewer
+# APP_ID is the GApplication ID (internal/ui applicationID) and MUST match
+# the shipped .desktop basename below for Wayland dock icon resolution.
+APP_ID       := io.github.m_m_n.EmDataViewer
 VERSION      ?= 0.1.0
 ARCH         := $(shell dpkg --print-architecture)
 BUILD_DIR    := build
@@ -56,16 +59,16 @@ dpkg: build icons
 	mkdir -p $(PKG_ROOT)/usr/share/icons/hicolor/scalable/apps
 	cp $(ICON_SRC) $(PKG_ROOT)/usr/share/icons/hicolor/scalable/apps/$(APP_NAME).svg
 	mkdir -p $(PKG_ROOT)/usr/share/applications
-	printf '[Desktop Entry]\n' > $(PKG_ROOT)/usr/share/applications/$(APP_NAME).desktop
-	printf 'Name=eM Data Viewer\n' >> $(PKG_ROOT)/usr/share/applications/$(APP_NAME).desktop
-	printf 'Comment=Data viewer application\n' >> $(PKG_ROOT)/usr/share/applications/$(APP_NAME).desktop
-	printf 'Exec=%s\n' '$(APP_NAME)' >> $(PKG_ROOT)/usr/share/applications/$(APP_NAME).desktop
-	printf 'Icon=%s\n' '$(APP_NAME)' >> $(PKG_ROOT)/usr/share/applications/$(APP_NAME).desktop
-	printf 'Terminal=false\n' >> $(PKG_ROOT)/usr/share/applications/$(APP_NAME).desktop
-	printf 'Type=Application\n' >> $(PKG_ROOT)/usr/share/applications/$(APP_NAME).desktop
-	printf 'Categories=Utility;\n' >> $(PKG_ROOT)/usr/share/applications/$(APP_NAME).desktop
-	printf 'StartupWMClass=%s\n' '$(APP_NAME)' >> $(PKG_ROOT)/usr/share/applications/$(APP_NAME).desktop
-	chmod 644 $(PKG_ROOT)/usr/share/applications/$(APP_NAME).desktop
+	printf '[Desktop Entry]\n' > $(PKG_ROOT)/usr/share/applications/$(APP_ID).desktop
+	printf 'Name=eM Data Viewer\n' >> $(PKG_ROOT)/usr/share/applications/$(APP_ID).desktop
+	printf 'Comment=Data viewer application\n' >> $(PKG_ROOT)/usr/share/applications/$(APP_ID).desktop
+	printf 'Exec=%s\n' '$(APP_NAME)' >> $(PKG_ROOT)/usr/share/applications/$(APP_ID).desktop
+	printf 'Icon=%s\n' '$(APP_NAME)' >> $(PKG_ROOT)/usr/share/applications/$(APP_ID).desktop
+	printf 'Terminal=false\n' >> $(PKG_ROOT)/usr/share/applications/$(APP_ID).desktop
+	printf 'Type=Application\n' >> $(PKG_ROOT)/usr/share/applications/$(APP_ID).desktop
+	printf 'Categories=Utility;\n' >> $(PKG_ROOT)/usr/share/applications/$(APP_ID).desktop
+	printf 'StartupWMClass=%s\n' '$(APP_NAME)' >> $(PKG_ROOT)/usr/share/applications/$(APP_ID).desktop
+	chmod 644 $(PKG_ROOT)/usr/share/applications/$(APP_ID).desktop
 	printf '#!/bin/sh\n' > $(PKG_ROOT)/DEBIAN/postinst
 	printf 'set -e\n' >> $(PKG_ROOT)/DEBIAN/postinst
 	printf 'command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache -f -t /usr/share/icons/hicolor || true\n' >> $(PKG_ROOT)/DEBIAN/postinst

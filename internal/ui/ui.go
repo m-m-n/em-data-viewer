@@ -7,9 +7,11 @@ import (
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 )
 
-// applicationID identifies this GApplication instance. It has no meaning
-// beyond satisfying GApplication's identifier requirement.
-const applicationID = "org.dataviewer.Widget"
+// applicationID identifies this GApplication instance. It is also the
+// Wayland app_id GNOME Shell uses to resolve the dock icon, and it MUST
+// equal the basename of the shipped .desktop file (dpkg target in
+// Makefile) for that resolution to succeed.
+const applicationID = "io.github.m_m_n.EmDataViewer"
 
 // osArgs is a seam over os.Args for testability (runArgs below).
 var osArgs = os.Args
