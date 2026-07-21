@@ -1,0 +1,67 @@
+round: 1
+executed_at: "2026-07-21T08:59:00+09:00"
+scope:
+  review_mode: diff
+  base_commit: 8023d24333b5c9361a84e83738ad02d9b5d48925
+  head_commit: 3bddc04cfd210e1a551d08efcef2ecc6fbefad8e
+  changed_files:
+    - Makefile
+    - contrib/gnome-shell-extension/keep-above@em-data-viewer.m-m-n.github.io/extension.js
+    - contrib/gnome-shell-extension/keep-above@em-data-viewer.m-m-n.github.io/metadata.json
+plan:
+  floor: [comprehensive, performance, spec]
+  discretionary:
+    - perspective: security
+      reason: "diff に $(HOME) 由来の変数展開パスへの rm -rf を実行する Makefile ターゲットが含まれるため"
+  codex_cross_validation: true
+perspective_runs:
+  - {perspective: comprehensive, source: claude, status: completed}
+  - {perspective: performance, source: claude, status: completed}
+  - {perspective: spec, source: claude, status: completed}
+  - {perspective: security, source: claude, status: completed}
+  - {perspective: performance, source: codex, status: skipped, skip_reason: "session-shared scratchpad の固定ファイル名 prompt.txt へのプロンプト書き出しが並列 codex-reviewer 間でレースし、security プロンプトに上書きされた状態で Codex が実行された。reviewer が送受信不一致を自己検知して skipped。診断: tmp/workflow-doctor-recommend-20260721-085823.md"}
+  - {perspective: spec, source: codex, status: completed}
+  - {perspective: security, source: codex, status: completed}
+findings:
+  - stable_id: 30df4ac583821833
+    severity: high
+    category: spec
+    file: contrib/gnome-shell-extension/keep-above@em-data-viewer.m-m-n.github.io/extension.js
+    line: 5
+    title: "The first available identifier prematurely determines the match"
+    description: "SPEC FR2 requires matching via get_gtk_application_id() or get_wm_class() and handling late-arriving ids. appIdOf() uses gtkId || wmClass, so a non-target wm_class can be treated as final while the GTK application ID is still absent; _maybeApply()/_recheck() then finalize a non-match and detach the watches. If the GTK ID later becomes the target, make_above() is never called, violating FR2's late-ID edge case."
+    suggestion: "Evaluate both identifiers independently. Apply when either equals TARGET_APP_ID, and do not finalize a nonmatch merely because only one nonmatching identifier has arrived while the other remains unset."
+    sources: [codex:spec]
+    confidence: 50
+    resolution: unresolved
+    resolution_reason: "rework task0003 に差し戻し(ユーザー決定)"
+  - stable_id: 272c51154d0baa96
+    severity: medium
+    category: spec
+    file: Makefile
+    line: 118
+    title: "Known-install enable failures are silently accepted"
+    description: "SPEC FR5 requires enabling the uuid, with re-login guidance for the fresh-install case. The unconditional `|| true` suppresses every enable failure, including failures for a previously known installation where fresh=0; the target then succeeds without enabling the extension or printing re-login guidance."
+    suggestion: "Tolerate an enable failure only for the specifically detected fresh/unknown-extension case. For a known installation, propagate the command failure so the target cannot report success while the extension remains disabled."
+    sources: [codex:spec]
+    confidence: 50
+    resolution: unresolved
+    resolution_reason: "rework task0003 に差し戻し(ユーザー決定)"
+  - stable_id: 34d210ad32419055
+    severity: medium
+    category: security
+    file: contrib/gnome-shell-extension/keep-above@em-data-viewer.m-m-n.github.io/extension.js
+    line: 40
+    title: "Client-controlled application ID grants always-on-top privileges"
+    description: "The extension authorizes make_above() solely by comparing get_gtk_application_id() or get_wm_class() with a fixed string. Both identifiers are supplied by the client window, so an untrusted local application can impersonate the target ID and obtain a persistent always-on-top window (UI-redressing/phishing opportunity). claude:security judged the same site below threshold (keep-above is a benign stacking hint); codex:security flagged it at medium."
+    suggestion: "Do not treat the application ID or WM class as an authorization credential. Validate a compositor-derived PID against the expected executable before calling make_above(); reject windows whose identity cannot be verified."
+    sources: [codex:security]
+    confidence: 50
+    resolution: unresolved
+    resolution_reason: "rework task0003 に差し戻し(ユーザー決定: PID 検証を実装する)"
+auto_fix:
+  loops_run: 0
+  applied_total: 0
+  termination: no-candidates
+residual_critical_high: 1
+rework_required: true

@@ -47,15 +47,23 @@ so that setup does not require manual file copying.
   `shell-version: ["50"]`, and a name/description identifying it as the
   em-data-viewer keep-above helper. The extension is written in ESM form
   (GNOME Shell 45+ `export default class ... extends Extension`).
-- **FR2:** The extension unconditionally applies `make_above()` to every
-  window whose app id is `io.github.m_m_n.EmDataViewer` (matched via
-  `Meta.Window.get_gtk_application_id()` or `get_wm_class()`). It connects
-  to the display's `window-created` signal for new windows. Because the app
-  id may not be set yet at `window-created` time on Wayland, the extension
-  must handle late-arriving ids (e.g. re-check on the window's
-  `notify::wm-class` / `notify::gtk-application-id` and disconnect the
-  per-window handlers once decided). It does not read the application's
-  config file; the extension's enable/disable state is the on/off switch.
+- **FR2:** The extension applies `make_above()` to every window whose app
+  id is `io.github.m_m_n.EmDataViewer` (matched via
+  `Meta.Window.get_gtk_application_id()` or `get_wm_class()`). A window
+  matches when EITHER identifier equals the target id; a non-matching value
+  in one identifier does not finalize a non-match while the other
+  identifier is still unset. It connects to the display's `window-created`
+  signal for new windows. Because the app id may not be set yet at
+  `window-created` time on Wayland, the extension must handle late-arriving
+  ids (e.g. re-check on the window's `notify::wm-class` /
+  `notify::gtk-application-id` and disconnect the per-window handlers once
+  decided). Before setting a matched window above, the extension verifies
+  the window's process identity: the compositor-reported PID must resolve
+  to an executable named `em-data-viewer` (via the proc filesystem);
+  windows failing this verification (no PID, unreadable process info,
+  different executable) are not set above. It does not read the
+  application's config file; the extension's enable/disable state is the
+  on/off switch.
 - **FR3:** On `enable()`, the extension scans all existing windows
   (`global.display.list_all_windows()` or equivalent) and applies FR2
   matching/`make_above()` to them, then starts watching `window-created`.
@@ -104,10 +112,12 @@ enable()
   → connect display "window-created" → maybeApply(window)
 
 maybeApply(window)
-  → app id known?
-      yes: matches io.github.m_m_n.EmDataViewer → make_above(); else ignore
-      no:  watch notify::wm-class / notify::gtk-application-id,
-           re-check once set, then disconnect the per-window watch
+  → either id matches io.github.m_m_n.EmDataViewer?
+      yes: process identity verified (PID → executable name) → make_above()
+      no, but an id may still arrive: watch notify::wm-class /
+           notify::gtk-application-id, re-check on change, disconnect the
+           per-window watch once decided (match, both-set non-match, or
+           window unmanaged)
 
 disable()
   → disconnect display + per-window handlers
@@ -146,11 +156,16 @@ passing.
       directory
 - [ ] M-6: Non-matching windows (other apps) are never set above
 - [ ] M-7: `go test ./...` passes; `make build` unaffected
+- [ ] M-8: A window presenting the target app id from a different owning
+      executable (spoofed id) is not set above
 
 ### Edge Cases
 
 - [ ] Window whose app id arrives after `window-created` is still matched
       (FR2 late-id handling)
+- [ ] Window whose first-arriving identifier is a non-matching value while
+      the other identifier later arrives with the target id is still
+      matched (FR2 either-id semantics)
 - [ ] `make install-extension` with the extension already installed
       re-copies files without error (idempotent)
 - [ ] `make uninstall-extension` when the extension is not installed

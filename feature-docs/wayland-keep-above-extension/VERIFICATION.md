@@ -45,10 +45,10 @@
 | Requirement | Tasks | Verification |
 |-------------|-------|--------------|
 | FR1 | task0001 | TS-2 |
-| FR2 | task0001 | M-2, M-6 (+ late-id edge case) |
+| FR2 | task0001, task0003 | M-2, M-6, M-8 (+ late-id / either-id edge cases) |
 | FR3 | task0001 | M-3 |
 | FR4 | task0001 | M-4 |
-| FR5 | task0002 | TS-3, M-1 |
+| FR5 | task0002, task0003 | TS-3, M-1 |
 | FR6 | task0002 | TS-3, M-5 |
 | NFR1 | task0001 | TS-2, M-2 |
 | NFR2 | task0001, task0002 | TS-1, M-7 |
@@ -73,6 +73,8 @@ Environment: GNOME Shell 50 / Wayland session, em-data-viewer installed.
       its directory; running it again (not installed) exits 0
 - [ ] M-6: Other applications' windows are never set above
 - [ ] M-7: `go test ./...` and `make build` behave exactly as before
+- [ ] M-8: A window presenting the target app id from a different owning
+      executable (spoofed id) is not set above
 - [ ] Edge: a matching window whose app id arrives late is still set above
 - [ ] Edge: `make install-extension` run twice in a row succeeds with no
       stale files
@@ -85,4 +87,4 @@ Environment: GNOME Shell 50 / Wayland session, em-data-viewer installed.
 |----------|-------|-----------|-----|--------|
 | Build/Test/Format | TS-1 + build + format | 3 | 0 | 0 |
 | Static inspection | TS-2, TS-3 | 0 | 0 | 2 |
-| Manual scenarios | M-1..M-7 + 3 edges | 0 | 0 | 10 |
+| Manual scenarios | M-1..M-8 + 4 edges | 0 | 0 | 12 |

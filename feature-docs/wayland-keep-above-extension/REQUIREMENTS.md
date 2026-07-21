@@ -79,7 +79,8 @@ status: draft
 - UUID: `keep-above@em-data-viewer.m-m-n.github.io`
 - 配置: `contrib/gnome-shell-extension/keep-above@em-data-viewer.m-m-n.github.io/`
 - `window-created` シグナルで app_id `io.github.m_m_n.EmDataViewer` のウィンドウを検出し `make_above()` を呼ぶ
-- 適用条件は無条件(アプリの config `window.keep_above` とは連動しない)
+- `make_above()` の適用前にウィンドウのプロセス実体(PID → 実行ファイル名 `em-data-viewer`)を検証する
+- 適用条件はアプリの config `window.keep_above` とは連動しない
 - metadata.json の shell-version は `50` のみ
 
 #### F02: 既存ウィンドウへの適用
@@ -139,6 +140,7 @@ status: draft
 - [x] enable 時に既存ウィンドウにも適用する
 - [x] `make uninstall-extension` も作る
 - [x] UUID: `keep-above@em-data-viewer.m-m-n.github.io`
+- [x] レビュー round 1 対応: F1(either-id マッチング)・F2(既知インストール時の enable 失敗伝播)・F3(PID による実行ファイル検証)を修正する
 
 ### 7.2 未確認・保留事項
 
