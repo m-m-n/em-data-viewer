@@ -106,7 +106,8 @@ clean:
 # install directory does not exist yet, or the running Shell does not yet
 # know the uuid. On a fresh install, `enable` may be a no-op (the Shell has
 # not scanned the new directory) so its failure is tolerated and re-login
-# guidance is printed instead.
+# guidance is printed instead. For a known install, an `enable` failure is a
+# real error: it is not discarded and fails the target.
 install-extension:
 	@command -v $(GNOME_EXTENSIONS_CLI) >/dev/null 2>&1 || { echo "install-extension: $(GNOME_EXTENSIONS_CLI) not found on PATH" >&2; exit 1; }
 	@fresh=0; \
@@ -115,9 +116,11 @@ install-extension:
 	rm -rf "$(EXT_INSTALL_DIR)" && \
 	mkdir -p "$(EXT_INSTALL_DIR)" && \
 	cp -r "$(EXT_SRC_DIR)/." "$(EXT_INSTALL_DIR)/" && \
-	{ $(GNOME_EXTENSIONS_CLI) enable "$(EXT_UUID)" >/dev/null 2>&1 || true; } && \
 	if [ "$$fresh" = "1" ]; then \
+		{ $(GNOME_EXTENSIONS_CLI) enable "$(EXT_UUID)" >/dev/null 2>&1 || true; }; \
 		echo "install-extension: fresh install of $(EXT_UUID) -- log out and back in (required on Wayland) for GNOME Shell to load it"; \
+	else \
+		$(GNOME_EXTENSIONS_CLI) enable "$(EXT_UUID)" || { echo "install-extension: failed to enable $(EXT_UUID)" >&2; exit 1; }; \
 	fi
 
 # uninstall-extension disables (failure tolerated: Shell absent, extension
