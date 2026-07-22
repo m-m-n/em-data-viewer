@@ -176,6 +176,12 @@ passing.
 - [ ] `install-extension` treats "install directory absent but Shell still
       knows the uuid" as a known install: an enable failure there fails
       the target (fresh detection is based on Shell recognition only)
+- [ ] When the Shell recognition query itself fails (no running Shell /
+      D-Bus session, e.g. headless or SSH install), `install-extension`
+      treats the install as fresh: files are copied, the enable failure is
+      tolerated, and the re-login guidance is printed (enabling is
+      impossible in that state regardless, so failing the target would
+      only break headless installs)
 - [ ] `make install-extension` with the extension already installed
       re-copies files without error (idempotent)
 - [ ] `make uninstall-extension` when the extension is not installed

@@ -32,13 +32,17 @@ workflow:
     completed_at_commit: d725f899072f70390371ab8ff9d8762c9636bab6
     base_commit: 8023d24333b5c9361a84e83738ad02d9b5d48925
   - id: review
-    status: in_progress
+    status: completed
+    completed_at_commit: c1f36fa55d1be7089aade63e765548220ebf7ad5
   - id: verify
-    status: pending
-    result: null
+    status: completed
+    completed_at_commit: c1f36fa55d1be7089aade63e765548220ebf7ad5
+    result: pass
     failed_items: []
+    notes: "make test (resources + go test ./...) / go build ./... / gofmt -l -w . 全 pass、integration worktree クリーン。TS-2 (metadata.json の uuid・shell-version・ESM 構造) と TS-3 (Makefile ターゲット・.PHONY・ツール probe・enable 失敗伝播) は静的検査で確認済み。M-1〜M-8 と edge 5 項目は GNOME Shell 50 / Wayland 実機での手動確認が必要(拡張は自動テスト対象外)。excluded 要件なし"
   - id: retrospect
-    status: pending
+    status: completed
+    completed_at_commit: c1f36fa55d1be7089aade63e765548220ebf7ad5
 
 tasks:
   task0001:
@@ -94,10 +98,10 @@ tasks:
     branch: em-workflow/wayland-keep-above-extension/task0004
 
 review:
-  status: pending
-  rounds_completed: 2
-  residual_critical_high: 1
-  needs_rework: true
+  status: completed
+  rounds_completed: 3
+  residual_critical_high: 0
+  needs_rework: false
   perspectives:
     comprehensive: completed
     performance: completed

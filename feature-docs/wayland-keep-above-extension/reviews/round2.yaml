@@ -45,8 +45,8 @@ findings:
     suggestion: "拡張が実際に make_above した窓を Set で記録し、disable ではその集合のみ unmake_above する(適用集合と復元集合を厳密一致させる)。"
     sources: [claude:comprehensive]
     confidence: 80
-    resolution: unresolved
-    resolution_reason: "rework task0004 に差し戻し(ユーザー決定)"
+    resolution: fixed
+    resolution_reason: "task0004 で修正(d725f89)、round 3 の再レビューで解消を確認"
   - stable_id: 3b3d6995cd54ab7f
     severity: medium
     category: spec
@@ -57,8 +57,8 @@ findings:
     suggestion: "disable() でも適用側と同じ either-id 判定(または適用時に記録した集合)を使う。"
     sources: [codex:spec]
     confidence: 65
-    resolution: unresolved
-    resolution_reason: "rework task0004 に差し戻し(ユーザー決定)。4f9c47fbd01517d0 と同一修正で解消予定"
+    resolution: fixed
+    resolution_reason: "task0004 で修正(d725f89、4f9c47fbd01517d0 と同一修正)、round 3 の再レビューで解消を確認"
   - stable_id: 76cf4416ad32590e
     severity: medium
     category: comprehensive
@@ -69,8 +69,8 @@ findings:
     suggestion: "basename 比較前に末尾の ' (deleted)' を除去して比較する。"
     sources: [claude:comprehensive]
     confidence: 80
-    resolution: unresolved
-    resolution_reason: "rework task0004 に差し戻し(ユーザー決定: (deleted) 除去 + basename 維持)"
+    resolution: fixed
+    resolution_reason: "task0004 で (deleted) マーカー除去を実装(d725f89)、round 3 の再レビューで解消を確認"
   - stable_id: 232ed1631a33e6d7
     severity: medium
     category: security
@@ -105,8 +105,8 @@ findings:
     suggestion: "fresh 判定を gnome-extensions list の uuid 認識のみに基づかせる。"
     sources: [codex:spec]
     confidence: 50
-    resolution: unresolved
-    resolution_reason: "rework task0004 に差し戻し(ユーザー決定)"
+    resolution: fixed
+    resolution_reason: "task0004 で修正(d725f89)、round 3 の再レビューで解消を確認"
 auto_fix:
   loops_run: 0
   applied_total: 0

@@ -1,0 +1,22 @@
+feature: wayland-keep-above-extension
+collected_at: "2026-07-22T20:56:12+09:00"
+session_ids: [f26d3713-4609-4b95-b0a7-5f6212fd9345]
+signals:
+  review_critical_high:
+    - {stable_id: 30df4ac583821833, category: spec, file: "contrib/gnome-shell-extension/keep-above@em-data-viewer.m-m-n.github.io/extension.js", title: "The first available identifier prematurely determines the match", resolution: fixed}
+    - {stable_id: 01d60248216ebb1b, category: spec, file: "contrib/gnome-shell-extension/keep-above@em-data-viewer.m-m-n.github.io/extension.js", title: "PID/実行ファイル検証ゲートが SPEC FR2 の『unconditionally』と矛盾(想定された SPEC 改訂が正典に未反映)", resolution: fixed}
+  conflict_reworks: []
+  file_prediction_misses: []
+  verification_failures: []
+  discretionary_perspectives:
+    - {perspective: security, reason: "diff に $(HOME) 由来の変数展開パスへの rm -rf を実行する Makefile ターゲットが含まれるため(全 3 ラウンド)"}
+  declined_findings:
+    - {stable_id: 232ed1631a33e6d7, category: security, resolution_reason: "ユーザー決定: basename 比較を維持。攻撃はローカルコード実行前提で keep-above は影響限定。フルパス許可リストは dev ビルドの keep-above を失わせる不利益が上回る"}
+    - {stable_id: 0016d858ba6803ed, category: security, resolution_reason: "232ed1631a33e6d7 と同一理由"}
+    - {stable_id: a03003199f0bb352, category: spec, resolution_reason: "意図された挙動として SPEC に明文化。list 失敗時は enable も必然的に失敗するため実害シナリオが成立せず、hard fail 化はヘッドレスインストールを壊す"}
+lessons_candidates:
+  - "オーケストレーターがメイン作業ツリーで行った SPEC/docs 改訂は、review fan-out の前に integration worktree へ同期コミットする必要がある。round 2 で同期漏れにより spec レビュアーが『コードと正典の乖離』を high として正しく検出した(01d60248216ebb1b)。round 3 では fan-out 前同期で再発なし。レビュー実行中の worktree への docs コミットも避ける(codex:spec が mid-edit の stale read race を観測)"
+  - "並列 codex-reviewer がプロンプトをセッション共有 scratchpad の固定名 prompt.txt 経由で受け渡し、書き込み→読み戻しの間に別レビュアーが上書きするレースが発生(round 1 performance が skipped)。診断: tmp/workflow-doctor-recommend-20260721-085823.md。プロンプトへの『一意ファイル名 or 直接引数渡し + 送受信観点一致の検証』注意書きで round 2/3 は再発なし。恒久対策は codex-reviewer.md 側への明記が推奨"
+  - "GJS 拡張タスクは TDD 不適用だが、implementer は gjs -m + モック Meta オブジェクトのスタンドアロンハーネスや、実プロセスのバイナリ削除で本物の /proc '(deleted)' マーカーを再現するなど、実行可能な検証を自発的に構築できた。GJS/Shell 拡張系タスクの Test Notes にこのパターンを事前に書くと再現性が上がる"
+  - "/proc/PID/exe の basename 検証は『(deleted)』サフィックス(バイナリ置換後)を考慮する必要がある — レビューで検出された実装知識(76cf4416ad32590e)"
+  - "apply/revert の判定ロジックを二重化すると乖離する(4f9c47fbd01517d0)。適用した対象を記録して復元はその集合に限定する tracked-set パターンが正解だった"

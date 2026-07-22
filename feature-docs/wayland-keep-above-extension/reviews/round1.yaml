@@ -33,8 +33,8 @@ findings:
     suggestion: "Evaluate both identifiers independently. Apply when either equals TARGET_APP_ID, and do not finalize a nonmatch merely because only one nonmatching identifier has arrived while the other remains unset."
     sources: [codex:spec]
     confidence: 50
-    resolution: unresolved
-    resolution_reason: "rework task0003 に差し戻し(ユーザー決定)"
+    resolution: fixed
+    resolution_reason: "task0003 で修正(c27712e)、round 2 の再レビューで解消を確認"
   - stable_id: 272c51154d0baa96
     severity: medium
     category: spec
@@ -45,8 +45,8 @@ findings:
     suggestion: "Tolerate an enable failure only for the specifically detected fresh/unknown-extension case. For a known installation, propagate the command failure so the target cannot report success while the extension remains disabled."
     sources: [codex:spec]
     confidence: 50
-    resolution: unresolved
-    resolution_reason: "rework task0003 に差し戻し(ユーザー決定)"
+    resolution: fixed
+    resolution_reason: "task0003 で修正(c27712e)、round 2 の再レビューで解消を確認"
   - stable_id: 34d210ad32419055
     severity: medium
     category: security
@@ -57,8 +57,8 @@ findings:
     suggestion: "Do not treat the application ID or WM class as an authorization credential. Validate a compositor-derived PID against the expected executable before calling make_above(); reject windows whose identity cannot be verified."
     sources: [codex:security]
     confidence: 50
-    resolution: unresolved
-    resolution_reason: "rework task0003 に差し戻し(ユーザー決定: PID 検証を実装する)"
+    resolution: fixed
+    resolution_reason: "task0003 で PID 検証を実装(c27712e)、round 2 の再レビューで解消を確認(basename 比較の強度は round 2 finding 232ed1631a33e6d7 として別途 declined)"
 auto_fix:
   loops_run: 0
   applied_total: 0
