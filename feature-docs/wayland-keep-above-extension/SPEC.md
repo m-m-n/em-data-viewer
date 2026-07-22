@@ -59,7 +59,8 @@ so that setup does not require manual file copying.
   `notify::gtk-application-id` and disconnect the per-window handlers once
   decided). Before setting a matched window above, the extension verifies
   the window's process identity: the compositor-reported PID must resolve
-  to an executable named `em-data-viewer` (via the proc filesystem);
+  to an executable named `em-data-viewer` (via the proc filesystem; a
+  kernel-appended ` (deleted)` marker on the resolved path is ignored);
   windows failing this verification (no PID, unreadable process info,
   different executable) are not set above. It does not read the
   application's config file; the extension's enable/disable state is the
@@ -68,8 +69,11 @@ so that setup does not require manual file copying.
   (`global.display.list_all_windows()` or equivalent) and applies FR2
   matching/`make_above()` to them, then starts watching `window-created`.
 - **FR4:** On `disable()`, the extension disconnects every signal handler it
-  connected (display-level and per-window) and calls `unmake_above()` on
-  matching windows currently above, so disabling reverts the effect.
+  connected (display-level and per-window) and calls `unmake_above()` on the
+  windows it set above (tracked at apply time and still present), so
+  disabling reverts exactly the extension's effect — no revert misses for
+  windows matched via either identifier, and no reverting of windows the
+  extension never touched.
 - **FR5:** Makefile target `install-extension`: copies the extension
   directory to `~/.local/share/gnome-shell/extensions/{uuid}/` (replacing
   any previous contents), then runs `gnome-extensions enable {uuid}`. When
@@ -121,7 +125,7 @@ maybeApply(window)
 
 disable()
   → disconnect display + per-window handlers
-  → unmake_above() on matched windows currently above
+  → unmake_above() on the tracked windows this extension set above
 ```
 
 ### Dependencies
@@ -166,6 +170,12 @@ passing.
 - [ ] Window whose first-arriving identifier is a non-matching value while
       the other identifier later arrives with the target id is still
       matched (FR2 either-id semantics)
+- [ ] A running instance whose on-disk binary was replaced or deleted
+      (proc path carries the ` (deleted)` marker) still passes process
+      verification
+- [ ] `install-extension` treats "install directory absent but Shell still
+      knows the uuid" as a known install: an enable failure there fails
+      the target (fresh detection is based on Shell recognition only)
 - [ ] `make install-extension` with the extension already installed
       re-copies files without error (idempotent)
 - [ ] `make uninstall-extension` when the extension is not installed

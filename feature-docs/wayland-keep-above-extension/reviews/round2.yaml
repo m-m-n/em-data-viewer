@@ -1,0 +1,115 @@
+round: 2
+executed_at: "2026-07-22T20:33:26+09:00"
+scope:
+  review_mode: diff
+  base_commit: 8023d24333b5c9361a84e83738ad02d9b5d48925
+  head_commit: c27712e8ad05f489f89de6b42fea30a6ddee1d56
+  changed_files:
+    - Makefile
+    - contrib/gnome-shell-extension/keep-above@em-data-viewer.m-m-n.github.io/extension.js
+    - contrib/gnome-shell-extension/keep-above@em-data-viewer.m-m-n.github.io/metadata.json
+plan:
+  floor: [comprehensive, performance, spec]
+  discretionary:
+    - perspective: security
+      reason: "round 1 と同一計画: $(HOME) 由来パスへの rm -rf を含む Makefile ターゲット + round 1 指摘対応の PID 検証実装の安全性確認"
+  codex_cross_validation: true
+perspective_runs:
+  - {perspective: comprehensive, source: claude, status: completed}
+  - {perspective: performance, source: claude, status: completed}
+  - {perspective: spec, source: claude, status: completed}
+  - {perspective: security, source: claude, status: completed}
+  - {perspective: performance, source: codex, status: completed}
+  - {perspective: spec, source: codex, status: completed}
+  - {perspective: security, source: codex, status: completed}
+findings:
+  - stable_id: 01d60248216ebb1b
+    severity: high
+    category: spec
+    file: contrib/gnome-shell-extension/keep-above@em-data-viewer.m-m-n.github.io/extension.js
+    line: 103
+    title: "PID/実行ファイル検証ゲートが SPEC FR2 の『unconditionally』と矛盾(想定された SPEC 改訂が正典に未反映)"
+    description: "コードは isVerifiedProcess() で make_above() を条件付けするが、integration worktree の正典 SPEC.md には round 1 決定の FR2 改訂(either-id + PID 検証)と M-8 が未反映で、コードだけが正典と乖離していた。原因はオーケストレーターがメイン作業ツリーで行った SPEC 改訂を integration worktree に同期し忘れたこと(プロセス上の欠落。コード自体の欠陥ではない)。"
+    suggestion: "round 1 の決定を正典 SPEC.md に反映し、コードと正典を一致させる。"
+    sources: [claude:spec]
+    confidence: 60
+    resolution: fixed
+    resolution_reason: "オーケストレーターが改訂済み feature-docs を integration worktree へ同期コミット(c91d093)。codex:spec が同期後の SPEC とコードの整合を独立確認し、同種指摘を stale-read 偽陽性として自主取り下げ"
+  - stable_id: 4f9c47fbd01517d0
+    severity: medium
+    category: comprehensive
+    file: contrib/gnome-shell-extension/keep-above@em-data-viewer.m-m-n.github.io/extension.js
+    line: 70
+    title: "disable() の復元判定が適用判定と非対称(マッチャ二重化)"
+    description: "適用側は decideMatch(either-id) + isVerifiedProcess を使うが、disable() の復元は appIdOf(first-truthy)===TARGET_APP_ID で判定しプロセス検証もない。wm-class のみ一致で above にした窓が revert されない(FR4 revert 漏れ)、拡張が触っていない窓を過剰 revert する非対称がある。codex:spec も同一サイトを指摘(3b3d6995cd54ab7f)。"
+    suggestion: "拡張が実際に make_above した窓を Set で記録し、disable ではその集合のみ unmake_above する(適用集合と復元集合を厳密一致させる)。"
+    sources: [claude:comprehensive]
+    confidence: 80
+    resolution: unresolved
+    resolution_reason: "rework task0004 に差し戻し(ユーザー決定)"
+  - stable_id: 3b3d6995cd54ab7f
+    severity: medium
+    category: spec
+    file: contrib/gnome-shell-extension/keep-above@em-data-viewer.m-m-n.github.io/extension.js
+    line: 70
+    title: "disable() uses first-truthy id, not FR2's either-id match, so some matched windows are not reverted"
+    description: "FR2 は either-id マッチを定義し FR4 は matching windows の revert を要求するが、disable() は appIdOf(first-truthy 単一値)で判定するため、gtk-id が別値・wm-class が一致の窓は enable 時に above 化されるのに disable で revert されない。claude:comprehensive の 4f9c47fbd01517d0 と同一サイト。"
+    suggestion: "disable() でも適用側と同じ either-id 判定(または適用時に記録した集合)を使う。"
+    sources: [codex:spec]
+    confidence: 65
+    resolution: unresolved
+    resolution_reason: "rework task0004 に差し戻し(ユーザー決定)。4f9c47fbd01517d0 と同一修正で解消予定"
+  - stable_id: 76cf4416ad32590e
+    severity: medium
+    category: comprehensive
+    file: contrib/gnome-shell-extension/keep-above@em-data-viewer.m-m-n.github.io/extension.js
+    line: 46
+    title: "実行体名検証が「(deleted)」サフィックスで誤って不一致になる"
+    description: "/proc/PID/exe は稼働中バイナリが置換・削除されると 'em-data-viewer (deleted)' を返すため、.deb 更新や make build 後の稼働インスタンスの窓が検証に失敗し keep-above を失う(enable スキャン・再有効化経路で回帰)。"
+    suggestion: "basename 比較前に末尾の ' (deleted)' を除去して比較する。"
+    sources: [claude:comprehensive]
+    confidence: 80
+    resolution: unresolved
+    resolution_reason: "rework task0004 に差し戻し(ユーザー決定: (deleted) 除去 + basename 維持)"
+  - stable_id: 232ed1631a33e6d7
+    severity: medium
+    category: security
+    file: contrib/gnome-shell-extension/keep-above@em-data-viewer.m-m-n.github.io/extension.js
+    line: 46
+    title: "プロセス検証が basename 限定でスプーフィング対策として不十分"
+    description: "isVerifiedProcess は /proc/PID/exe の basename のみを比較するため、任意バイナリを 'em-data-viewer' にリネームし app id / WM_CLASS を偽装すれば検証を通過し keep-above を獲得できる。TOCTOU/PID 再利用はウィンドウ存在中の接続生存で実質緩和済み。フルパス許可リスト化を提案。"
+    suggestion: "既知インストール先(/usr/bin/em-data-viewer 等)のフルパス完全一致で検証する。"
+    sources: [claude:security]
+    confidence: 75
+    resolution: declined
+    resolution_reason: "ユーザー決定: basename 比較を維持。攻撃はローカルコード実行が前提で、keep-above は権限昇格・データ露出に繋がらない影響限定の stacking hint(claude:security round 1 評価)。フルパス許可リストは dev ビルド(build/em-data-viewer)や別配置で正規バイナリの keep-above を失わせる運用上の不利益が上回る"
+  - stable_id: 0016d858ba6803ed
+    severity: medium
+    category: security
+    file: contrib/gnome-shell-extension/keep-above@em-data-viewer.m-m-n.github.io/extension.js
+    line: 21
+    title: "Process verification remains spoofable"
+    description: "get_pid() は X11/XWayland ではクライアント自称値になり得る点、basename 比較は同名バイナリで通過できる点、PID 再利用の TOCTOU 窓がある点を指摘。コンポジタ発行の信頼済みクライアント識別への置き換えを提案。232ed1631a33e6d7 と同一論点(サイト判定上は別エントリ)。"
+    suggestion: "クライアント供給 PID のウィンドウ種別を拒否し、コンポジタ由来の信頼できるプロセス同一性に基づいて検証する。"
+    sources: [codex:security]
+    confidence: 50
+    resolution: declined
+    resolution_reason: "232ed1631a33e6d7 と同一理由(ユーザー決定: 影響限定・運用上の不利益が上回るため basename 維持)"
+  - stable_id: 4d6ccd58ad0dad78
+    severity: medium
+    category: spec
+    file: Makefile
+    line: 113
+    title: "'fresh install' detection conflates directory absence with Shell not knowing the extension, contrary to FR5"
+    description: "FR5 は再ログイン案内と enable 失敗許容を『Shell が拡張を未認識』の場合に限定するが、実装はディレクトリ不在 OR uuid 未認識で fresh=1 とするため、Shell 認識済みのままディレクトリだけ消えた場合に本来エラーであるべき enable 失敗が握りつぶされる。"
+    suggestion: "fresh 判定を gnome-extensions list の uuid 認識のみに基づかせる。"
+    sources: [codex:spec]
+    confidence: 50
+    resolution: unresolved
+    resolution_reason: "rework task0004 に差し戻し(ユーザー決定)"
+auto_fix:
+  loops_run: 0
+  applied_total: 0
+  termination: no-candidates
+residual_critical_high: 0
+rework_required: true

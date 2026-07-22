@@ -80,6 +80,10 @@ Environment: GNOME Shell 50 / Wayland session, em-data-viewer installed.
       stale files
 - [ ] Edge: manually un-setting "Always on Top" via Alt+Space is not
       re-applied for that existing window
+- [ ] Edge: a running instance whose binary was replaced on disk
+      (` (deleted)` proc marker) still passes process verification
+- [ ] Edge: enable failure with the uuid still known to the Shell fails
+      `install-extension` even when the install directory was absent
 
 ## Verification Summary
 
