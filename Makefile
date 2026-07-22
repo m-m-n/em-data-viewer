@@ -102,16 +102,17 @@ clean:
 
 # install-extension copies the bundled GNOME Shell extension (task0001) into
 # the current user's per-user extensions directory and enables it (FR5).
-# Fresh installs are detected before the copy overwrites anything: either the
-# install directory does not exist yet, or the running Shell does not yet
-# know the uuid. On a fresh install, `enable` may be a no-op (the Shell has
-# not scanned the new directory) so its failure is tolerated and re-login
-# guidance is printed instead. For a known install, an `enable` failure is a
-# real error: it is not discarded and fails the target.
+# Fresh installs are detected before the copy overwrites anything, based
+# SOLELY on whether the running Shell recognizes the uuid (review round 2:
+# install-directory absence no longer participates, so a known-to-Shell
+# install with a missing directory is still a known install). On a fresh
+# install, `enable` may be a no-op (the Shell has not scanned the new
+# directory) so its failure is tolerated and re-login guidance is printed
+# instead. For a known install, an `enable` failure is a real error: it is
+# not discarded and fails the target.
 install-extension:
 	@command -v $(GNOME_EXTENSIONS_CLI) >/dev/null 2>&1 || { echo "install-extension: $(GNOME_EXTENSIONS_CLI) not found on PATH" >&2; exit 1; }
 	@fresh=0; \
-	[ -d "$(EXT_INSTALL_DIR)" ] || fresh=1; \
 	$(GNOME_EXTENSIONS_CLI) list | grep -Fxq "$(EXT_UUID)" || fresh=1; \
 	rm -rf "$(EXT_INSTALL_DIR)" && \
 	mkdir -p "$(EXT_INSTALL_DIR)" && \

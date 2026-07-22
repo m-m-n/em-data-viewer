@@ -7,10 +7,6 @@ const TARGET_APP_ID = 'io.github.m_m_n.EmDataViewer';
 // id-matched window's PID must resolve to via /proc before it is trusted.
 const TARGET_EXECUTABLE_NAME = 'em-data-viewer';
 
-function appIdOf(window) {
-    return window.get_gtk_application_id() || window.get_wm_class();
-}
-
 // Either-id matching (FR2 revision): a window matches as soon as either
 // identifier equals the target id. A non-match is final only once both
 // identifiers are set and neither matches; while one identifier is still
@@ -31,6 +27,14 @@ function decideMatch(window) {
 // filesystem - to the em-data-viewer executable before a window is trusted.
 // No PID, an unreadable link, or a different executable name all verify as
 // false; there is no retry loop for this check.
+//
+// Deleted-marker tolerance (FR2 detail, review round 2): the kernel appends
+// ' (deleted)' to the /proc/PID/exe link target when the on-disk binary was
+// replaced or removed after the process started (e.g. a package upgrade
+// while em-data-viewer keeps running). Strip it before the basename
+// comparison so a still-running, already-updated instance keeps verifying.
+const DELETED_MARKER = ' (deleted)';
+
 function isVerifiedProcess(window) {
     const pid = window.get_pid();
     if (!pid || pid <= 0)
@@ -43,13 +47,25 @@ function isVerifiedProcess(window) {
         return false;
     }
 
-    return !!exePath && GLib.path_get_basename(exePath) === TARGET_EXECUTABLE_NAME;
+    if (!exePath)
+        return false;
+
+    const resolvedPath = exePath.endsWith(DELETED_MARKER)
+        ? exePath.slice(0, -DELETED_MARKER.length)
+        : exePath;
+
+    return GLib.path_get_basename(resolvedPath) === TARGET_EXECUTABLE_NAME;
 }
 
 export default class KeepAboveExtension extends Extension {
     enable() {
         // window -> handler ids for its pending id watch (FR2 late-id handling).
         this._windowWatches = new Map();
+        // window -> its 'unmanaged' handler id, for exactly the windows this
+        // extension itself set above (FR4 revision, round 2): disable()
+        // reverts this tracked set and nothing else - no re-deriving
+        // "matching windows" with a separate matcher.
+        this._appliedWindows = new Map();
 
         this._displayHandlerId = global.display.connect('window-created',
             (_display, window) => this._maybeApply(window));
@@ -66,10 +82,11 @@ export default class KeepAboveExtension extends Extension {
             this._detachWatch(window);
         this._windowWatches = null;
 
-        for (const window of global.display.list_all_windows()) {
-            if (appIdOf(window) === TARGET_APP_ID && window.above)
-                window.unmake_above();
+        for (const [window, unmanagedId] of this._appliedWindows) {
+            window.disconnect(unmanagedId);
+            window.unmake_above();
         }
+        this._appliedWindows = null;
     }
 
     _maybeApply(window) {
@@ -100,8 +117,18 @@ export default class KeepAboveExtension extends Extension {
     }
 
     _applyIfMatched(window, decision) {
-        if (decision === 'match' && isVerifiedProcess(window) && !window.above)
-            window.make_above();
+        if (decision !== 'match' || !isVerifiedProcess(window) || window.above)
+            return;
+
+        window.make_above();
+        // Record the window this call actually set above (FR4 revision) so
+        // disable() reverts exactly this set. A window already above (user
+        // set it manually pre-enable) returned above and is never recorded.
+        const unmanagedId = window.connect('unmanaged', () => {
+            window.disconnect(unmanagedId);
+            this._appliedWindows.delete(window);
+        });
+        this._appliedWindows.set(window, unmanagedId);
     }
 
     _detachWatch(window) {
