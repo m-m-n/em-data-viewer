@@ -28,7 +28,8 @@ workflow:
     status: completed
     completed_at_commit: b2e6b93e07c660c4a16c3d53c1a19572faa07e03
   - id: implement
-    status: in_progress
+    status: completed
+    completed_at_commit: 781375603c3161d7d12dfd6a3f24ab28f73ff6ed
     base_commit: b2e6b93e07c660c4a16c3d53c1a19572faa07e03
   - id: review
     status: pending
@@ -65,8 +66,8 @@ tasks:
     domains: [ui]
     complexity: medium
     requirements: [FR4, FR5, FR6, FR7, FR8, NFR2, NFR3]
-    status: in_progress
-    notes: null
+    status: merged
+    notes: "merge commit 781375603c3161d7d12dfd6a3f24ab28f73ff6ed; conflict_retries 0; tests pass; no deviations (merged parent into the task branch first to pick up task0001's ApplyBackgroundPattern contract)"
     branch: em-workflow/window-opacity-toggle/task0002
 
 review:
