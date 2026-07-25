@@ -6,6 +6,9 @@ window:
   keep_above: true
   style:
     background: "#1e1e1eee"
+    # background_alt is the second transparency pattern; Ctrl+T switches
+    # between the two.
+    background_alt: "#1e1e1e99"
     border_color: "#888888"
     border_width: 1
 
