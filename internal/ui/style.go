@@ -43,7 +43,13 @@ const dividerColor = "#666666"
 // config.Config.Window.Style; keys absent from this table are ignored by
 // MergeStyle so unrelated user keys never error.
 var WindowStyleDefaults = map[string]string{
-	"background":       "#1e1e1eee",
+	"background": "#1e1e1eee",
+	// background_alt is the alternate window background pattern selected
+	// at runtime by ApplyBackgroundPattern (design-system/tokens.yaml
+	// color.surface-alt). The internal key matches the public config key
+	// (window.style.background_alt) verbatim, exactly like "background",
+	// so no specKeyAliases entry is needed.
+	"background_alt":   "#1e1e1e99",
 	"frame":            "#888888",
 	"frame-width":      "1px",
 	"radius":           "8px",
@@ -169,6 +175,27 @@ func MergeStyle(defaults, overrides map[string]string) map[string]string {
 		}
 	}
 	return merged
+}
+
+// ApplyBackgroundPattern returns a copy of style with the "background" entry
+// set to the alternate pattern ("background_alt") when alt is true, or left
+// as the primary value when alt is false. The input map is never mutated
+// (callers hold the merged map across the process lifetime and re-use it on
+// every restyle); every entry other than "background" passes through
+// unchanged. If style has no "background_alt" entry — a caller that built
+// its map without the defaults — the primary "background" value is kept
+// rather than emitting an empty background.
+func ApplyBackgroundPattern(style map[string]string, alt bool) map[string]string {
+	result := make(map[string]string, len(style))
+	for k, v := range style {
+		result[k] = v
+	}
+	if alt {
+		if altValue, ok := style["background_alt"]; ok {
+			result["background"] = altValue
+		}
+	}
+	return result
 }
 
 // windowCSS translates a merged window style map into the GTK CSS block for

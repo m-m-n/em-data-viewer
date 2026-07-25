@@ -6,6 +6,9 @@ color:
   surface:
     value: "#1e1e1eee"
     description: "ウィジェットウィンドウの背景（半透明ダーク）。ユーザーが config で上書きするデフォルト値。広い面はこれ一色で、セクションごとの面色は作らない"
+  surface-alt:
+    value: "#1e1e1e99"
+    description: "ウィジェットウィンドウの代替背景（surface よりさらに透過度が高い）。ランタイムのトグルで選択される。主値は surface のまま"
   on-surface:
     value: "#e0e0e0"
     description: "surface 上の出力テキストの基準色。コマンド出力が Pango マークアップで独自色を持つ場合はそちらが優先される"

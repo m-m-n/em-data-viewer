@@ -521,6 +521,125 @@ func TestSectionCSS_DefaultAndOverrideOutputSize(t *testing.T) {
 	}
 }
 
+// --- Alternate background pattern (task0001) ---
+
+// TestMergeStyle_BackgroundAltDefault references AC-1: merging a window
+// style with no background_alt override yields the default value
+// "#1e1e1e99", and leaves background at its existing default.
+func TestMergeStyle_BackgroundAltDefault(t *testing.T) {
+	got := MergeStyle(WindowStyleDefaults, nil)
+
+	if got["background_alt"] != "#1e1e1e99" {
+		t.Errorf(`MergeStyle()["background_alt"] = %q, want "#1e1e1e99"`, got["background_alt"])
+	}
+	if got["background"] != WindowStyleDefaults["background"] {
+		t.Errorf("MergeStyle()[\"background\"] = %q, want default %q", got["background"], WindowStyleDefaults["background"])
+	}
+}
+
+// TestMergeStyle_BackgroundAltOverride references AC-2: a user
+// background_alt override is applied, and does not affect background.
+func TestMergeStyle_BackgroundAltOverride(t *testing.T) {
+	got := MergeStyle(WindowStyleDefaults, map[string]string{"background_alt": "#000000cc"})
+
+	if got["background_alt"] != "#000000cc" {
+		t.Errorf(`MergeStyle()["background_alt"] = %q, want %q`, got["background_alt"], "#000000cc")
+	}
+	if got["background"] != WindowStyleDefaults["background"] {
+		t.Errorf("MergeStyle()[\"background\"] = %q, want default %q (unaffected by background_alt override)", got["background"], WindowStyleDefaults["background"])
+	}
+}
+
+// TestApplyBackgroundPattern_SelectsPrimaryOrAlt references AC-3: the
+// selection rule returns the primary background when the flag is false and
+// the alternate when true, leaving every other entry identical to the
+// input.
+func TestApplyBackgroundPattern_SelectsPrimaryOrAlt(t *testing.T) {
+	style := MergeStyle(WindowStyleDefaults, nil)
+
+	primary := ApplyBackgroundPattern(style, false)
+	if primary["background"] != style["background"] {
+		t.Errorf(`ApplyBackgroundPattern(style, false)["background"] = %q, want %q`, primary["background"], style["background"])
+	}
+
+	alt := ApplyBackgroundPattern(style, true)
+	if alt["background"] != style["background_alt"] {
+		t.Errorf(`ApplyBackgroundPattern(style, true)["background"] = %q, want %q`, alt["background"], style["background_alt"])
+	}
+
+	for _, got := range []map[string]string{primary, alt} {
+		for k, want := range style {
+			if k == "background" {
+				continue
+			}
+			if got[k] != want {
+				t.Errorf("ApplyBackgroundPattern() result[%q] = %q, want unchanged %q", k, got[k], want)
+			}
+		}
+	}
+}
+
+// TestApplyBackgroundPattern_DoesNotMutateInput references AC-4: the input
+// map is byte-identical before and after a call, for either flag value.
+func TestApplyBackgroundPattern_DoesNotMutateInput(t *testing.T) {
+	for _, alt := range []bool{false, true} {
+		style := MergeStyle(WindowStyleDefaults, nil)
+		before := make(map[string]string, len(style))
+		for k, v := range style {
+			before[k] = v
+		}
+
+		_ = ApplyBackgroundPattern(style, alt)
+
+		if len(style) != len(before) {
+			t.Fatalf("ApplyBackgroundPattern(style, %v) changed input map size: got %d keys, want %d", alt, len(style), len(before))
+		}
+		for k, want := range before {
+			if style[k] != want {
+				t.Errorf("ApplyBackgroundPattern(style, %v) mutated input[%q] = %q, want unchanged %q", alt, k, style[k], want)
+			}
+		}
+	}
+}
+
+// TestApplyBackgroundPattern_MissingBackgroundAltKeepsPrimary references
+// AC-5: with the alt flag true, applied to a map with no background_alt
+// entry, the primary background value is kept rather than an empty value.
+func TestApplyBackgroundPattern_MissingBackgroundAltKeepsPrimary(t *testing.T) {
+	style := map[string]string{
+		"background":  "#1e1e1eee",
+		"frame":       "#888888",
+		"frame-width": "1px",
+	}
+
+	got := ApplyBackgroundPattern(style, true)
+
+	if got["background"] != style["background"] {
+		t.Errorf(`ApplyBackgroundPattern(style, true)["background"] = %q, want %q (kept, no background_alt entry)`, got["background"], style["background"])
+	}
+}
+
+// TestConfigExample_BackgroundAltRoundTripsThroughMerge references AC-7:
+// the documented background_alt key in config.yaml.example round-trips
+// through the window style merge (no example-file test exists in the
+// config package to attach this to).
+func TestConfigExample_BackgroundAltRoundTripsThroughMerge(t *testing.T) {
+	path := filepath.Join("..", "..", "config.yaml.example")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	if !strings.Contains(string(data), "background_alt") {
+		t.Fatalf("%s does not document background_alt", path)
+	}
+
+	overrides := map[string]string{"background_alt": "#000000cc"}
+	got := MergeStyle(WindowStyleDefaults, overrides)
+	if got["background_alt"] != "#000000cc" {
+		t.Errorf(`MergeStyle()["background_alt"] = %q, want %q (round-tripped override)`, got["background_alt"], "#000000cc")
+	}
+}
+
 // --- Drift guard (AC-5): defaults table vs design-system/tokens.yaml ---
 
 type tokenEntry struct {
@@ -539,6 +658,7 @@ type typographyEntry struct {
 type designTokens struct {
 	Color struct {
 		Surface      tokenEntry `yaml:"surface"`
+		SurfaceAlt   tokenEntry `yaml:"surface-alt"`
 		OnSurface    tokenEntry `yaml:"on-surface"`
 		OnSurfaceDim tokenEntry `yaml:"on-surface-dim"`
 		Frame        tokenEntry `yaml:"frame"`
@@ -579,6 +699,7 @@ func TestStyleDefaults_MatchDesignTokens(t *testing.T) {
 
 	wantWindow := map[string]string{
 		"background":       tokens.Color.Surface.Value,
+		"background_alt":   tokens.Color.SurfaceAlt.Value,
 		"frame":            tokens.Color.Frame.Value,
 		"frame-width":      tokens.Border.FrameWidth.Value,
 		"radius":           tokens.Radius.Window.Value,
