@@ -77,8 +77,9 @@ tasks:
     domains: [ui]
     complexity: low
     requirements: [FR4, FR5, NFR2]
-    status: pending
+    status: in_progress
     notes: "orchestrator-synthesized: integration build broke with EffectiveOpacity redeclared after task0001/task0002 both added the shared contract to style.go"
+    branch: em-workflow/whole-window-opacity-toggle/task0003
 
 
 review:
