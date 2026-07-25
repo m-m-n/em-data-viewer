@@ -1,0 +1,96 @@
+round: 1
+executed_at: "2026-07-25T16:45:00+09:00"
+scope:
+  review_mode: diff
+  base_commit: b2e6b93e07c660c4a16c3d53c1a19572faa07e03
+  head_commit: c64830566c9c43aa6b7df6cf038a1fe3423f427d
+  changed_files:
+    - config.yaml.example
+    - design-system/tokens.yaml
+    - internal/ui/style.go
+    - internal/ui/style_test.go
+    - internal/ui/window.go
+    - internal/ui/window_test.go
+plan:
+  floor: [comprehensive, spec]
+  discretionary:
+    - perspective: security
+      reason: "ユーザー設定由来の新しい値（background_alt）がそのままウィンドウ CSS 文字列に埋め込まれる経路が追加されたため"
+  codex_cross_validation: true
+perspective_runs:
+  - {perspective: comprehensive, source: claude, status: completed}
+  - {perspective: spec, source: claude, status: completed}
+  - {perspective: spec, source: codex, status: skipped, skip_reason: "codex-cli unavailable"}
+  - {perspective: security, source: claude, status: completed}
+  - {perspective: security, source: codex, status: skipped, skip_reason: "codex-cli unavailable"}
+findings:
+  - stable_id: fc0ab6c2e7bf7540
+    severity: medium
+    category: spec
+    file: internal/ui/window.go
+    line: 648
+    title: "Ctrl+Shift+T もトグルとして横取りされる（FR7「claims only Ctrl+T」との齟齬）"
+    description: >-
+      isToggleBackgroundKeyEvent は Control と keyval t/T のみを判定し ShiftMask を
+      見ないため、Ctrl+Shift+T もトグルとして claim される。SPEC FR7 の本文
+      （"T with a different modifier combination" は unclaimed）とは齟齬。ただし
+      SPEC の Test Scenarios 側の記述はより緩く読めるため SPEC 内部にも揺れがある。
+      Caps Lock は LockMask を立てるので、ShiftMask を弾いても大文字 keyval 経路は
+      壊れない。既存入力（drag-to-move / 右クリックメニュー / scroll block）への
+      実害はない。
+    suggestion: >-
+      (a) isToggleBackgroundKeyEvent で ShiftMask を弾き、テストに
+      「Ctrl+Shift+T → false」「Ctrl+Lock+T → true」を追加する、または
+      (b) Ctrl+Shift+T も受理する意図なら SPEC FR7 本文を Alt/Super のみ除外と
+      明記して齟齬を解消する。
+    sources: [claude:spec]
+    confidence: 60
+    resolution: deferred
+    resolution_reason: "medium かつ category:spec のため自動修正ゲート対象外。SPEC 本文自体の揺れを含むため人間の判断が要る（batch mode: 人間の評価者へ差し戻し）"
+  - stable_id: ae2726a438348886
+    severity: medium
+    category: comprehensive
+    file: internal/ui/window_test.go
+    line: 238
+    title: "FR8/AC-6 の「設定リロードで有効パターンが保持される」ガードが applySettings を一切通っていない"
+    description: >-
+      当該テストは applySettings を呼ばず f.windowStyle への直接代入で置き換えて
+      いるため、最初のアサーションはテスト本体自身によって成立が保証されており
+      失敗し得ない。実装は現時点では正しい（applySettings は altPatternActive に
+      触れない）が、将来 applySettings 側でパターン状態をリセットする変更が入っても
+      FR8 の回帰を検出できない。applySettings が GTK 依存でヘッドレスから直接
+      呼べない制約は妥当。
+    suggestion: >-
+      applySettings から GTK 非依存のスタイル再マージ部分を切り出し、テストが実際の
+      コードパスを呼べるようにする。あわせて「applySettings は windowStyle の再代入
+      しかしない」という不正確なコメントを修正する。
+    sources: [claude:comprehensive]
+    confidence: 65
+    resolution: deferred
+    resolution_reason: "medium のため自動修正ゲート（critical/high）対象外"
+  - stable_id: 9438846b08b84e57
+    severity: medium
+    category: comprehensive
+    file: doc/SPECIFICATION.md
+    line: 272
+    title: "プロジェクト仕様書に background_alt と Ctrl+T が未反映"
+    description: >-
+      新しい公開面（config キー window.style.background_alt とキーバインド Ctrl+T）が
+      プロジェクトの正典仕様 doc/SPECIFICATION.md に反映されていない。同ファイルの
+      Configuration の YAML スキーマ例と Widget Behavior の入力バインド記述が対象。
+      feature SPEC の Affected Components には挙がっていないため、意図的な後回しなら
+      対応不要判定でよい。
+    suggestion: >-
+      doc/SPECIFICATION.md の Configuration 例に background_alt を追加し、
+      Widget Behavior に Ctrl+T トグルの 1 行を追加する。まとめて同期する運用なら
+      その旨を記録して対応不要とする。
+    sources: [claude:spec]
+    confidence: 50
+    resolution: deferred
+    resolution_reason: "changed_files 外のファイルに対する指摘のため category を comprehensive に強制・confidence を 50 に上限化（review-phase.md R3-7）。medium のため自動修正ゲート対象外"
+auto_fix:
+  loops_run: 0
+  applied_total: 0
+  termination: clean
+residual_critical_high: 0
+rework_required: false
