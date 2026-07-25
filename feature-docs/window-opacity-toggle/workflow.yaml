@@ -25,7 +25,7 @@ workflow:
     skipped_reason: "既存ウィンドウ背景の代替アルファ値をトークン1つ追加するのみで、新規画面・コンポーネントの視覚判断がない（値は SPEC.md FR2/FR3 で確定済み）"
   - id: create-plan
     artifacts: [IMPLEMENTATION.md, VERIFICATION.md, tasks/]
-    status: pending
+    status: in_progress
   - id: implement
     status: pending
     base_commit: 376147d553c7cf900dafb3d7d51a8c1b6bffd7dc
