@@ -1,0 +1,55 @@
+feature: whole-window-opacity-toggle
+collected_at: "2026-07-25T17:39:00+09:00"
+session_ids: [cd43b941-1e14-473f-8d58-229686b6261d]
+signals:
+  review_critical_high: []
+  conflict_reworks: []
+  file_prediction_misses:
+    - task: task0002
+      files: [internal/ui/style.go]
+  verification_failures: []
+  discretionary_perspectives: []
+  declined_findings: []
+lessons_candidates:
+  - >-
+    並列実装で共有契約を IMPLEMENTATION.md にピン留めしても、契約の実装を所有する
+    タスクが未コミットのうちは、消費側タスクの worktree からは契約が「存在しない」
+    ように見える。task0002 はこの状態に直面し、契約を自前で style.go（task0001 の
+    担当ファイル）に実装した。両者の追加箇所がテキスト上離れていたため git は
+    コンフリクトを検出せず自動マージし、EffectiveOpacity が二重定義になって統合
+    ブランチのビルドが壊れた。implementer 本人は deviation として正直に報告し、
+    「どちらかのマージでコンフリクトするはず」と予測していたが、実際には
+    コンフリクトせずすり抜けた。
+  - >-
+    上記は「コンフリクトすれば親側採用プロトコルで解決される」という前提が、
+    テキスト上離れた同種の追加では成立しないことを示す。plan-writing の
+    「Interface contracts instead of sequencing」は契約の記述だけを求めているが、
+    消費側が契約の実体を見つけられないときの振る舞い（自前実装せずスタブを置く、
+    あるいは所有タスクの着地を待つ）が規定されていない。
+  - >-
+    implement フェーズ完了時点でビルドが壊れていたが、implement-phase.md は
+    「no test run here — integrated verification is the review/verify phases' job」
+    としているため、プロトコル通りに進めると壊れた統合ブランチのまま review に
+    入っていた。今回はオーケストレーターが deviation 報告を根拠に統合ビルドを
+    確認して発見し、task0003 を合成して implement フェーズ内で解決した。
+    deviation が報告されたときに統合ビルドを確認する規定があると再現性が上がる。
+  - >-
+    レビューで見つかった NaN すり抜け（strconv.ParseFloat が "NaN" を受理し、
+    `n < 0.0 || n > 1.0` が NaN に対して両方 false になる）は comprehensive と
+    spec の2観点が独立に指摘したが、両者とも severity: medium を付けたため
+    R4 の auto-fix 候補ゲート（critical/high のみ）に乗らず未修正のまま完了した。
+    「無言でウィンドウが不可視になる」という失敗モードの重さと medium という
+    severity 判定の噛み合わせは検討の余地がある。
+  - >-
+    同一の物理的欠陥を2観点が指摘したが、報告行が 196 と 190 で 6 行離れていたため
+    same_site 判定（|line差| <= 5）に掛からず、confidence の +15 ボーナスも
+    付かなかった。行バケット幅がクロス観点の一致検出を取りこぼす例。
+  - >-
+    実装が採用したデザイントークン名（opacity.primary / opacity.alternate）が
+    SPEC FR3 の指定（opacity.window / opacity.window-alt）と食い違ったまま
+    drift-guard テストは緑だった。テストが実装側の名前に合わせて書かれたため、
+    仕様との齟齬をテストが検出できない構造になっている。
+  - >-
+    Codex CLI が環境に無かったため、create-spec の batch 相談ループと review の
+    クロスバリデーションの両方がスキップされた。無人実行の品質が環境の
+    プロビジョニングに依存している。

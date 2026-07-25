@@ -57,7 +57,7 @@ workflow:
       GUI セッションが必要なため無人実行では未実施 — 人間の評価者に残す。
       excluded 要件は無し。
   - id: retrospect
-    status: pending
+    status: completed
 
 tasks:
   task0001:
