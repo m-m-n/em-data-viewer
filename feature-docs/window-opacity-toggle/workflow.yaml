@@ -1,0 +1,128 @@
+schema_version: 1
+feature: window-opacity-toggle
+created: 2026-07-25
+base_branch: main
+parent_branch: em-workflow/window-opacity-toggle/integration
+
+project:
+  license: MIT
+  components:
+    main:
+      language: go
+      build_command: "PATH=\"$HOME/go/compiler/bin:$PATH\" make build"
+      test_command: "PATH=\"$HOME/go/compiler/bin:$PATH\" make test"
+      format_command: "PATH=\"$HOME/go/compiler/bin:$PATH\" gofmt -l -w ."
+      e2e_test_command: ""
+
+workflow:
+  - id: create-spec
+    artifacts: [REQUIREMENTS.md, SPEC.md]
+    status: completed
+    completed_at_commit: 566fde06c862166e06420d122f2d8e3efa6657b4
+  - id: design
+    artifacts: [DESIGN.md, design/]
+    status: skipped
+    skipped_reason: "既存ウィンドウ背景の代替アルファ値をトークン1つ追加するのみで、新規画面・コンポーネントの視覚判断がない（値は SPEC.md FR2/FR3 で確定済み）"
+  - id: create-plan
+    artifacts: [IMPLEMENTATION.md, VERIFICATION.md, tasks/]
+    status: pending
+  - id: implement
+    status: pending
+    base_commit: 376147d553c7cf900dafb3d7d51a8c1b6bffd7dc
+  - id: review
+    status: pending
+  - id: verify
+    status: pending
+    result: null
+    failed_items: []
+  - id: retrospect
+    status: pending
+
+tasks: {}
+
+review:
+  status: pending
+  rounds_completed: 0
+
+requirements:
+  FR1:
+    title: "window.style.background_alt style key with the same syntax as background"
+    status: ok
+    tbd_reason: null
+    excluded_reason: null
+    tasks: []
+    tests: []
+  FR2:
+    title: "Built-in default #1e1e1e99 for background_alt"
+    status: ok
+    tbd_reason: null
+    excluded_reason: null
+    tasks: []
+    tests: []
+  FR3:
+    title: "color.surface-alt design token matching the runtime default"
+    status: ok
+    tbd_reason: null
+    excluded_reason: null
+    tasks: []
+    tests: []
+  FR4:
+    title: "Active pattern selects the window CSS background-color only"
+    status: ok
+    tbd_reason: null
+    excluded_reason: null
+    tasks: []
+    tests: []
+  FR5:
+    title: "Primary pattern active at startup; never persisted to config"
+    status: ok
+    tbd_reason: null
+    excluded_reason: null
+    tasks: []
+    tests: []
+  FR6:
+    title: "Ctrl+T flips the active pattern and restyles live"
+    status: ok
+    tbd_reason: null
+    excluded_reason: null
+    tasks: []
+    tests: []
+  FR7:
+    title: "Only Ctrl+T is claimed; other input behavior unchanged"
+    status: ok
+    tbd_reason: null
+    excluded_reason: null
+    tasks: []
+    tests: []
+  FR8:
+    title: "Active pattern survives a runtime config reload"
+    status: ok
+    tbd_reason: null
+    excluded_reason: null
+    tasks: []
+    tests: []
+  NFR1:
+    title: "Compatibility: configs without background_alt unchanged, startup look unchanged"
+    status: ok
+    tbd_reason: null
+    excluded_reason: null
+    tasks: []
+    tests: []
+  NFR2:
+    title: "Testability: toggle logic pure and GTK-free; config stays GTK-free"
+    status: ok
+    tbd_reason: null
+    excluded_reason: null
+    tasks: []
+    tests: []
+  NFR3:
+    title: "Usability: immediate switch with no resize or reflow"
+    status: ok
+    tbd_reason: null
+    excluded_reason: null
+    tasks: []
+    tests: []
+
+batch:
+  review_rework_count: 0
+  verify_rework_count: 0
