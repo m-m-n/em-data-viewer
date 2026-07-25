@@ -127,14 +127,16 @@ func TestParsePixelLength_ReadsBareNumbersAsPixels(t *testing.T) {
 	}
 }
 
-// --- Background pattern toggle (task0002) ---
+// --- Whole-window opacity toggle (task0002) ---
 
-// TestIsToggleBackgroundKeyEvent references AC-1 and AC-2: the pure match
-// rule accepts the lowercase or uppercase `t` keyval with the control
-// modifier present and neither alt nor super held, and rejects every other
-// combination (no control, control+alt, control+super, and an unrelated
-// keyval with control held).
-func TestIsToggleBackgroundKeyEvent(t *testing.T) {
+// TestIsToggleOpacityKeyEvent references AC-6: the pure match rule accepts
+// the lowercase or uppercase `t` keyval with the control modifier present
+// and neither alt nor super held, and rejects every other combination (no
+// control, control+alt, control+super, and an unrelated keyval with control
+// held). The match rule itself is unchanged by this task; only the
+// identifier is renamed (IMPLEMENTATION.md Conventions "Naming: pattern
+// identifiers").
+func TestIsToggleOpacityKeyEvent(t *testing.T) {
 	tests := []struct {
 		name   string
 		keyval uint
@@ -152,128 +154,118 @@ func TestIsToggleBackgroundKeyEvent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := isToggleBackgroundKeyEvent(tt.keyval, tt.state); got != tt.want {
-				t.Errorf("isToggleBackgroundKeyEvent(%v, %v) = %v, want %v", tt.keyval, tt.state, got, tt.want)
+			if got := isToggleOpacityKeyEvent(tt.keyval, tt.state); got != tt.want {
+				t.Errorf("isToggleOpacityKeyEvent(%v, %v) = %v, want %v", tt.keyval, tt.state, got, tt.want)
 			}
 		})
 	}
 }
 
-// TestFrame_BackgroundPatternActive_StartsPrimaryAndTogglesWithoutDrift
-// references AC-4 (a newly constructed frame reports the primary pattern
-// active) and AC-3 (the flip alternates primary/alternate with no
-// accumulated drift across repeated invocations). Exercised on a
+// TestFrame_OpacityPatternActive_StartsPrimary references AC-1: a freshly
+// constructed frame reports the primary pattern as active. Exercised on a
 // zero-value frame -- no GTK display required (Test Notes).
-func TestFrame_BackgroundPatternActive_StartsPrimaryAndTogglesWithoutDrift(t *testing.T) {
+func TestFrame_OpacityPatternActive_StartsPrimary(t *testing.T) {
 	f := &frame{}
 
-	if f.backgroundPatternActive() {
-		t.Fatalf("newly constructed frame reports the alternate pattern active, want primary (AC-4)")
-	}
-
-	wantAfterFlip := []bool{true, false, true, false}
-	for i, want := range wantAfterFlip {
-		f.flipBackgroundPattern()
-		if got := f.backgroundPatternActive(); got != want {
-			t.Errorf("after flip #%d: backgroundPatternActive() = %v, want %v (AC-3)", i+1, got, want)
-		}
+	if f.opacityPatternActive() {
+		t.Fatalf("newly constructed frame reports the alternate pattern active, want primary (AC-1)")
 	}
 }
 
-// TestFrame_BackgroundPatternStyle_TogglingSwapsOnlyBackground references
-// AC-5: toggling produces a stylesheet whose window background is the
-// alternate value, toggling back restores the primary value, and every
-// other emitted declaration is unchanged. Tests the state-plus-selection
-// composition directly against buildStylesheet rather than driving GTK
-// (Test Notes).
-func TestFrame_BackgroundPatternStyle_TogglingSwapsOnlyBackground(t *testing.T) {
-	f := &frame{windowStyle: MergeStyle(WindowStyleDefaults, nil)}
-
-	primaryCSS := buildStylesheet(f.backgroundPatternStyle(), nil)
-	wantPrimary := fmt.Sprintf("background-color: %s;", f.windowStyle["background"])
-	if !strings.Contains(primaryCSS, wantPrimary) {
-		t.Fatalf("primary stylesheet = %q, want it to contain %q", primaryCSS, wantPrimary)
-	}
-
-	f.flipBackgroundPattern()
-	altCSS := buildStylesheet(f.backgroundPatternStyle(), nil)
-	wantAlt := fmt.Sprintf("background-color: %s;", f.windowStyle["background_alt"])
-	if !strings.Contains(altCSS, wantAlt) {
-		t.Errorf("alternate stylesheet = %q, want it to contain %q", altCSS, wantAlt)
-	}
-	if stripBackgroundColorLine(primaryCSS) != stripBackgroundColorLine(altCSS) {
-		t.Errorf("stylesheets differ beyond the background-color declaration:\nprimary=%q\nalt=%q", primaryCSS, altCSS)
-	}
-
-	f.flipBackgroundPattern()
-	restoredCSS := buildStylesheet(f.backgroundPatternStyle(), nil)
-	if restoredCSS != primaryCSS {
-		t.Errorf("toggling back = %q, want it to restore the primary stylesheet %q", restoredCSS, primaryCSS)
-	}
-}
-
-// stripBackgroundColorLine removes every "background-color:" declaration
-// line from css, isolating comparison to every other emitted declaration
-// (TestFrame_BackgroundPatternStyle_TogglingSwapsOnlyBackground, AC-5).
-func stripBackgroundColorLine(css string) string {
-	lines := strings.Split(css, "\n")
-	kept := make([]string, 0, len(lines))
-	for _, l := range lines {
-		if strings.HasPrefix(strings.TrimSpace(l), "background-color:") {
-			continue
-		}
-		kept = append(kept, l)
-	}
-	return strings.Join(kept, "\n")
-}
-
-// TestFrame_BackgroundPatternStyle_SettingsReapplicationKeepsActivePattern
-// references AC-6: re-applying window settings (the config-reload path)
-// while the alternate pattern is active leaves the alternate pattern
-// active, and the newly supplied alternate value is what the stylesheet
-// then carries. applySettings' own body does nothing more than reassign
-// f.windowStyle via MergeStyle before restyling, so that reassignment is
-// simulated directly here rather than calling the GTK-dependent
-// applySettings/restyle methods (Test Notes).
-func TestFrame_BackgroundPatternStyle_SettingsReapplicationKeepsActivePattern(t *testing.T) {
-	f := &frame{windowStyle: MergeStyle(WindowStyleDefaults, nil)}
-	f.flipBackgroundPattern() // alternate now active
-
-	f.windowStyle = MergeStyle(WindowStyleDefaults, map[string]string{"background_alt": "#000000cc"})
-
-	if !f.backgroundPatternActive() {
-		t.Fatalf("re-applying window settings cleared the active pattern, want it to remain alternate (AC-6)")
-	}
-
-	css := buildStylesheet(f.backgroundPatternStyle(), nil)
-	want := "background-color: #000000cc;"
-	if !strings.Contains(css, want) {
-		t.Errorf("stylesheet = %q, want it to contain the newly supplied alternate value %q", css, want)
-	}
-}
-
-// TestFrame_FlipBackgroundPattern_DoesNotTouchConfigDerivedStyleMap
-// references AC-7 (no config write occurs as a result of toggling),
-// asserted structurally per Test Notes: the toggle path never writes into
-// f.windowStyle, the config-derived merged map that applySettings produces
-// from config -- so nothing in the toggle path could reach the config file.
-func TestFrame_FlipBackgroundPattern_DoesNotTouchConfigDerivedStyleMap(t *testing.T) {
-	f := &frame{windowStyle: MergeStyle(WindowStyleDefaults, nil)}
+// TestFrame_FlipOpacityPattern_TogglesWithoutDriftAndDoesNotTouchStyleMap
+// references AC-2: the flip helper alternates false -> true -> false across
+// successive calls with no accumulated drift, and never modifies the
+// merged style map (the config-derived map applySettings produces).
+func TestFrame_FlipOpacityPattern_TogglesWithoutDriftAndDoesNotTouchStyleMap(t *testing.T) {
+	f := &frame{windowStyle: map[string]string{"opacity": "1.0", "opacity_alt": "0.45"}}
 	before := make(map[string]string, len(f.windowStyle))
 	for k, v := range f.windowStyle {
 		before[k] = v
 	}
 
-	f.flipBackgroundPattern()
-	f.flipBackgroundPattern()
-	f.flipBackgroundPattern()
+	wantAfterFlip := []bool{true, false, true, false}
+	for i, want := range wantAfterFlip {
+		f.flipOpacityPattern()
+		if got := f.opacityPatternActive(); got != want {
+			t.Errorf("after flip #%d: opacityPatternActive() = %v, want %v (AC-2)", i+1, got, want)
+		}
+	}
 
 	if len(f.windowStyle) != len(before) {
-		t.Fatalf("toggling changed the config-derived style map size: got %d keys, want %d", len(f.windowStyle), len(before))
+		t.Fatalf("flipping changed the style map size: got %d keys, want %d (AC-2)", len(f.windowStyle), len(before))
 	}
 	for k, want := range before {
 		if f.windowStyle[k] != want {
-			t.Errorf("toggling wrote into the config-derived style map[%q] = %q, want unchanged %q (AC-7)", k, f.windowStyle[k], want)
+			t.Errorf("flipping wrote into the style map[%q] = %q, want unchanged %q (AC-2)", k, f.windowStyle[k], want)
 		}
+	}
+}
+
+// TestFrame_EffectiveOpacity_SelectsPrimaryOrAlternateByActivePattern
+// references AC-3: the effective opacity the frame would apply is the
+// primary configured value when the primary pattern is active and the
+// alternate configured value when the alternate pattern is active, for a
+// frame whose style map carries both values. The style map is constructed
+// directly rather than through MergeStyle (Test Notes; the opacity keys'
+// presence in WindowStyleDefaults is task0001's territory).
+func TestFrame_EffectiveOpacity_SelectsPrimaryOrAlternateByActivePattern(t *testing.T) {
+	f := &frame{windowStyle: map[string]string{"opacity": "0.3", "opacity_alt": "0.6"}}
+
+	if got := EffectiveOpacity(f.windowStyle, f.opacityPatternActive()); got != 0.3 {
+		t.Errorf("EffectiveOpacity() with primary active = %v, want 0.3 (AC-3)", got)
+	}
+
+	f.flipOpacityPattern()
+	if got := EffectiveOpacity(f.windowStyle, f.opacityPatternActive()); got != 0.6 {
+		t.Errorf("EffectiveOpacity() with alternate active = %v, want 0.6 (AC-3)", got)
+	}
+}
+
+// TestFrame_EffectiveOpacity_SettingsReapplicationKeepsActivePatternAndPicksUpNewValue
+// references AC-4, the reload regression: re-applying settings with new
+// style values while the alternate pattern is active leaves the alternate
+// pattern active and yields the newly configured alternate opacity as the
+// effective value. applySettings' own body does nothing more than
+// reassign f.windowStyle before applying, so that reassignment is
+// simulated directly here (Test Notes) rather than calling the
+// GTK-dependent applySettings/applyOpacity methods.
+func TestFrame_EffectiveOpacity_SettingsReapplicationKeepsActivePatternAndPicksUpNewValue(t *testing.T) {
+	f := &frame{windowStyle: map[string]string{"opacity": "1.0", "opacity_alt": "0.45"}}
+	f.flipOpacityPattern() // alternate now active
+
+	f.windowStyle = map[string]string{"opacity": "1.0", "opacity_alt": "0.2"}
+
+	if !f.opacityPatternActive() {
+		t.Fatalf("re-applying window settings cleared the active pattern, want it to remain alternate (AC-4)")
+	}
+	if got := EffectiveOpacity(f.windowStyle, f.opacityPatternActive()); got != 0.2 {
+		t.Errorf("EffectiveOpacity() = %v, want the newly configured alternate value 0.2 (AC-4)", got)
+	}
+}
+
+// TestFrame_Stylesheet_IndependentOfActiveOpacityPattern references AC-5:
+// the stylesheet built by the frame is byte-identical for both values of
+// the active pattern (the toggle no longer affects CSS), and the window's
+// background color in that stylesheet is the configured primary background
+// in both cases. Comparing the two stylesheet strings directly also guards
+// against a future reintroduction of the CSS-side toggle (Test Notes).
+func TestFrame_Stylesheet_IndependentOfActiveOpacityPattern(t *testing.T) {
+	f := &frame{windowStyle: MergeStyle(WindowStyleDefaults, nil)}
+
+	wantBackground := fmt.Sprintf("background-color: %s;", f.windowStyle["background"])
+
+	primaryCSS := buildStylesheet(f.windowStyle, nil)
+	if !strings.Contains(primaryCSS, wantBackground) {
+		t.Fatalf("primary stylesheet = %q, want it to contain %q", primaryCSS, wantBackground)
+	}
+
+	f.flipOpacityPattern() // alternate now active
+	altCSS := buildStylesheet(f.windowStyle, nil)
+
+	if altCSS != primaryCSS {
+		t.Errorf("stylesheet changed when the active pattern flipped, want it byte-identical (AC-5):\nprimary=%q\nalt=%q", primaryCSS, altCSS)
+	}
+	if !strings.Contains(altCSS, wantBackground) {
+		t.Errorf("alternate stylesheet = %q, want it to still contain the primary background %q (AC-5)", altCSS, wantBackground)
 	}
 }

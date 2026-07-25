@@ -45,14 +45,14 @@ type frame struct {
 
 	windowStyle map[string]string
 
-	// altPatternActive records which window background pattern is showing
-	// (task0002 Design "Active-pattern state", FR5): false selects the
+	// altOpacityActive records which window opacity pattern is showing
+	// (task0002 Design "Active-pattern state", FR6): false selects the
 	// primary pattern, true the alternate. It starts false (primary
 	// active) via the zero value and is process-local -- never read from
 	// or written to the config file, and untouched by settings
 	// re-application (applySettings), so a config reload cannot clobber it
-	// (FR8, IMPLEMENTATION.md D2).
-	altPatternActive bool
+	// (FR9, IMPLEMENTATION.md D2).
+	altOpacityActive bool
 
 	// settingsWidth is the configured window.width (0 until the first
 	// applySettings). refit re-asserts it on every resize instead of
@@ -75,10 +75,10 @@ type frame struct {
 
 // newFrame builds the undecorated frame window (FR1) and wires
 // drag-to-move (AC-3), the right-click context menu (AC-7), the keep-above
-// backend (FR4) and the Ctrl+T background-pattern toggle (task0002 FR6,
-// FR7). quit is invoked by the context menu's 終了 item; onKeepAboveToggle
-// is invoked with the NEW desired value whenever the user toggles the
-// 「最前面に固定」check item.
+// backend (FR4) and the Ctrl+T opacity-pattern toggle (task0002 Design "Key
+// controller"). quit is invoked by the context menu's 終了 item;
+// onKeepAboveToggle is invoked with the NEW desired value whenever the user
+// toggles the 「最前面に固定」check item.
 func newFrame(app *gtk.Application, quit func(), onKeepAboveToggle func(enabled bool)) *frame {
 	win := gtk.NewApplicationWindow(app)
 	win.SetDecorated(false)
@@ -109,7 +109,7 @@ func newFrame(app *gtk.Application, quit func(), onKeepAboveToggle func(enabled 
 	}
 	attachReflowTriggers(win, f)
 	attachMonitorRecapTrigger(win, f)
-	attachBackgroundToggle(win, f)
+	attachOpacityToggle(win, f)
 
 	if display != nil {
 		gtk.StyleContextAddProviderForDisplay(display, f.css, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
@@ -279,64 +279,76 @@ func (f *frame) toplevelSurface() gdk.Surfacer {
 // configurable height (task0001): the height is derived from content by
 // refit below. A style change can change the content's natural height
 // (e.g. a font-size change), so this also re-fits the window height.
-// f.altPatternActive is never touched here (task0002 FR8, IMPLEMENTATION.md
-// D2): the active toggle pattern is not stored in f.windowStyle, so
-// re-merging it from fresh config values cannot clobber the active pattern.
+// f.altOpacityActive is never touched here (task0002 FR9, IMPLEMENTATION.md
+// D2): the active pattern is not stored in f.windowStyle, so re-merging it
+// from fresh config values cannot clobber the active pattern -- which is
+// what makes the reloaded opacity values take effect for whichever pattern
+// is active. applyOpacity is one of its exactly two call sites (task0002
+// Design "Apply step", D3): this one covers both initial construction and
+// every runtime config reload.
 func (f *frame) applySettings(settings WindowSettings) {
 	if settings.Width > 0 {
 		f.settingsWidth = settings.Width
 		f.win.SetDefaultSize(settings.Width, -1)
 	}
 	f.windowStyle = MergeStyle(WindowStyleDefaults, settings.Style)
+	f.applyOpacity()
 	f.restyle()
 	f.refit()
 }
 
 // restyle rebuilds and reloads the full stylesheet (window + every current
-// section) so style changes apply live without recreating widgets. The
-// window-level style is passed through backgroundPatternStyle first so the
-// active toggle pattern (task0002) is what actually renders; f.windowStyle
-// itself is never rewritten by this call.
+// section) so style changes apply live without recreating widgets, built
+// from f.windowStyle directly (task0002 IMPLEMENTATION.md D1): the
+// indirection that used to compose the active pattern into the style map
+// before building the stylesheet is gone, so the stylesheet is now a
+// function of the merged style map alone and is unaffected by the active
+// pattern.
 func (f *frame) restyle() {
-	f.css.LoadFromString(buildStylesheet(f.backgroundPatternStyle(), f.sections.styleEntries()))
+	f.css.LoadFromString(buildStylesheet(f.windowStyle, f.sections.styleEntries()))
 }
 
-// backgroundPatternStyle composes the current active-pattern selection with
-// f.windowStyle (task0002 Design "Applying the pattern", IMPLEMENTATION.md
-// D2): the merged map itself is never rewritten, only this late, pure
-// transformation of it. Factored out of restyle so the composition is
-// testable directly against buildStylesheet without a GTK display (task0002
-// Test Notes).
-func (f *frame) backgroundPatternStyle() map[string]string {
-	return ApplyBackgroundPattern(f.windowStyle, f.altPatternActive)
+// applyOpacity sets the window widget's opacity property to the effective
+// opacity for the currently active pattern (task0002 Design "Apply step",
+// IMPLEMENTATION.md D1): GTK composites the widget opacity over the
+// window's entire rendering -- background, border, labels and output text
+// alike -- which per-color alpha alone could not reach. Called from
+// exactly two places (D3): applySettings, after the style map has been
+// re-merged, and toggleOpacityPattern, immediately after the flip. Never
+// calls restyle: this is a single property assignment, with no stylesheet
+// reload, no re-measure, no re-fit and no re-pack, so window geometry
+// cannot change as a side effect (NFR3). Safe to call before the window
+// has been realized or presented: it only assigns a property on an object
+// that exists from construction time.
+func (f *frame) applyOpacity() {
+	gtk.BaseWidget(f.win).SetOpacity(EffectiveOpacity(f.windowStyle, f.altOpacityActive))
 }
 
-// backgroundPatternActive reports which pattern is currently active: false
-// for primary, true for alternate (task0002 AC-4).
-func (f *frame) backgroundPatternActive() bool {
-	return f.altPatternActive
+// opacityPatternActive reports which pattern is currently active: false
+// for primary, true for alternate (task0002 AC-1).
+func (f *frame) opacityPatternActive() bool {
+	return f.altOpacityActive
 }
 
-// flipBackgroundPattern toggles the active-pattern state field in isolation
-// from restyle (task0002 AC-3, AC-7): a pure boolean negation, extracted so
+// flipOpacityPattern toggles the active-pattern state field in isolation
+// from applyOpacity (task0002 AC-2): a pure boolean negation, extracted so
 // the flip sequence -- and the fact that it never touches f.windowStyle,
 // the config-derived map -- is testable independently of the GTK-dependent
-// restyle call.
-func (f *frame) flipBackgroundPattern() {
-	f.altPatternActive = !f.altPatternActive
+// applyOpacity call.
+func (f *frame) flipOpacityPattern() {
+	f.altOpacityActive = !f.altOpacityActive
 }
 
-// toggleBackgroundPattern flips the active background pattern and
-// re-applies it immediately (task0002 Design "Toggle", AC-3, AC-5, AC-7):
-// restyle only reloads the CSS provider -- it does not re-measure, re-fit
-// or re-pack -- so geometry cannot change as a side effect (NFR3). Safe to
-// invoke before the window has been presented or realized: it only mutates
-// a field and reloads a provider that already exists at construction time.
-// No config write occurs (AC-7): neither this nor restyle touches the
-// config-derived f.windowStyle map or any file.
-func (f *frame) toggleBackgroundPattern() {
-	f.flipBackgroundPattern()
-	f.restyle()
+// toggleOpacityPattern flips the active opacity pattern and re-applies it
+// immediately (task0002 Design "Key controller", FR7): applyOpacity only
+// assigns the window widget's opacity property -- it never rebuilds the
+// stylesheet, re-measures, re-fits or re-packs -- so geometry cannot
+// change as a side effect (NFR3). Safe to invoke before the window has
+// been presented or realized. No config write occurs: neither this nor
+// applyOpacity touches the config-derived f.windowStyle map or any file.
+func (f *frame) toggleOpacityPattern() {
+	f.flipOpacityPattern()
+	f.applyOpacity()
 }
 
 // reflowAndRefit repacks the sections view's rows for the window's current
@@ -637,15 +649,16 @@ func beginWindowMove(widget *gtk.Widget, gesture *gtk.GestureDrag, x, y float64)
 	toplevel.BeginMove(device, int(gesture.CurrentButton()), nx, ny, gesture.CurrentEventTime())
 }
 
-// isToggleBackgroundKeyEvent is the pure match rule for the Ctrl+T
-// background-pattern toggle (task0002 Design "Key controller and match
-// rule", AC-1, AC-2): accepts the lowercase or uppercase `t` keyval with
-// the control modifier present and neither alt nor super held, so distinct
-// bindings (e.g. a compositor's Ctrl+Alt+T terminal shortcut) are never
-// stolen. A keyboard with Caps Lock or Shift engaged reports the uppercase
-// keyval, so both are accepted. Pure and GUI-free so it is unit-testable
-// without GTK.
-func isToggleBackgroundKeyEvent(keyval uint, state gdk.ModifierType) bool {
+// isToggleOpacityKeyEvent is the pure match rule for the Ctrl+T
+// opacity-pattern toggle (task0002 Design "Key controller", FR8): accepts
+// the lowercase or uppercase `t` keyval with the control modifier present
+// and neither alt nor super held, so distinct bindings (e.g. a
+// compositor's Ctrl+Alt+T terminal shortcut) are never stolen. A keyboard
+// with Caps Lock or Shift engaged reports the uppercase keyval, so both
+// are accepted. Pure and GUI-free so it is unit-testable without GTK. This
+// match rule is unchanged from the toggle's previous, CSS-only mechanism
+// (task0002 AC-6); only the identifier and the handler it invokes change.
+func isToggleOpacityKeyEvent(keyval uint, state gdk.ModifierType) bool {
 	if keyval != gdk.KEY_t && keyval != gdk.KEY_T {
 		return false
 	}
@@ -658,22 +671,22 @@ func isToggleBackgroundKeyEvent(keyval uint, state gdk.ModifierType) bool {
 	return true
 }
 
-// attachBackgroundToggle wires the Ctrl+T background-pattern toggle on a
+// attachOpacityToggle wires the Ctrl+T opacity-pattern toggle on a
 // window-level key controller, in the same capture-phase style
 // blockScrollGestures and attachDragToMove above use, so no child widget
-// can swallow the event first (IMPLEMENTATION.md D4). The controller
-// claims the event only when isToggleBackgroundKeyEvent accepts it; on any
-// other event it leaves the event unclaimed so drag-to-move, the
-// right-click context menu and scroll blocking behave exactly as before
-// (FR7).
-func attachBackgroundToggle(win *gtk.ApplicationWindow, f *frame) {
+// can swallow the event first. The controller claims the event only when
+// isToggleOpacityKeyEvent accepts it; on any other event it leaves the
+// event unclaimed so drag-to-move, the right-click context menu and
+// scroll blocking behave exactly as before (task0002 Design "Key
+// controller").
+func attachOpacityToggle(win *gtk.ApplicationWindow, f *frame) {
 	key := gtk.NewEventControllerKey()
 	key.SetPropagationPhase(gtk.PhaseCapture)
 	key.ConnectKeyPressed(func(keyval, _ uint, state gdk.ModifierType) bool {
-		if !isToggleBackgroundKeyEvent(keyval, state) {
+		if !isToggleOpacityKeyEvent(keyval, state) {
 			return false
 		}
-		f.toggleBackgroundPattern()
+		f.toggleOpacityPattern()
 		return true
 	})
 	gtk.BaseWidget(win).AddController(key)
