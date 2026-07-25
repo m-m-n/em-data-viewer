@@ -6,6 +6,7 @@ package ui
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -43,18 +44,22 @@ const dividerColor = "#666666"
 // config.Config.Window.Style; keys absent from this table are ignored by
 // MergeStyle so unrelated user keys never error.
 var WindowStyleDefaults = map[string]string{
-	"background": "#1e1e1eee",
-	// background_alt is the alternate window background pattern selected
-	// at runtime by ApplyBackgroundPattern (design-system/tokens.yaml
-	// color.surface-alt). The internal key matches the public config key
-	// (window.style.background_alt) verbatim, exactly like "background",
-	// so no specKeyAliases entry is needed.
-	"background_alt":   "#1e1e1e99",
+	"background":       "#1e1e1eee",
 	"frame":            "#888888",
 	"frame-width":      "1px",
 	"radius":           "8px",
 	"error-color":      "#e57373",
 	"error-background": "#3a2222ee",
+	// opacity is the primary whole-window opacity (design-system/tokens.yaml
+	// opacity.primary): fully opaque, the startup state. The internal key
+	// matches the public config key (window.style.opacity) verbatim,
+	// exactly like "background", so no specKeyAliases entry is needed.
+	"opacity": "1.0",
+	// opacity_alt is the alternate whole-window opacity
+	// (design-system/tokens.yaml opacity.alternate): the dimmed state
+	// selected at runtime by the key toggle. Same no-alias-needed naming
+	// as "opacity".
+	"opacity_alt": "0.45",
 }
 
 // SectionStyleDefaults are the design-token defaults for per-section
@@ -177,25 +182,37 @@ func MergeStyle(defaults, overrides map[string]string) map[string]string {
 	return merged
 }
 
-// ApplyBackgroundPattern returns a copy of style with the "background" entry
-// set to the alternate pattern ("background_alt") when alt is true, or left
-// as the primary value when alt is false. The input map is never mutated
-// (callers hold the merged map across the process lifetime and re-use it on
-// every restyle); every entry other than "background" passes through
-// unchanged. If style has no "background_alt" entry — a caller that built
-// its map without the defaults — the primary "background" value is kept
-// rather than emitting an empty background.
-func ApplyBackgroundPattern(style map[string]string, alt bool) map[string]string {
-	result := make(map[string]string, len(style))
-	for k, v := range style {
-		result[k] = v
+// parseOpacity interprets a configured opacity string as a float in the
+// inclusive range 0.0-1.0, tolerating surrounding whitespace like other
+// style values. Anything else — an empty string, non-numeric text, or a
+// number outside the range — yields the supplied fallback unchanged (never
+// clamped). Never returns an error and never panics.
+func parseOpacity(v string, fallback float64) float64 {
+	v = strings.TrimSpace(v)
+	n, err := strconv.ParseFloat(v, 64)
+	if err != nil {
+		return fallback
 	}
+	if n < 0.0 || n > 1.0 {
+		return fallback
+	}
+	return n
+}
+
+// EffectiveOpacity returns the opacity to apply for the given merged window
+// style map and active-pattern flag: the primary "opacity" key's value when
+// alt is false, the alternate "opacity_alt" key's value when true. A key
+// missing from style is treated the same as an unusable value — the
+// selected key's own built-in default (WindowStyleDefaults) is substituted
+// via parseOpacity. The key that was not selected is never consulted, and
+// the input map is never modified.
+func EffectiveOpacity(style map[string]string, alt bool) float64 {
+	key := "opacity"
 	if alt {
-		if altValue, ok := style["background_alt"]; ok {
-			result["background"] = altValue
-		}
+		key = "opacity_alt"
 	}
-	return result
+	fallback, _ := strconv.ParseFloat(WindowStyleDefaults[key], 64)
+	return parseOpacity(style[key], fallback)
 }
 
 // windowCSS translates a merged window style map into the GTK CSS block for
