@@ -1,0 +1,18 @@
+feature: window-opacity-toggle
+collected_at: "2026-07-25T16:46:00+09:00"
+session_ids: [be8649fe-cc9b-411a-bced-21798808f658]
+signals:
+  review_critical_high: []
+  conflict_reworks: []
+  file_prediction_misses: []
+  verification_failures: []
+  discretionary_perspectives:
+    - perspective: security
+      reason: "ユーザー設定由来の新しい値（background_alt）がそのままウィンドウ CSS 文字列に埋め込まれる経路が追加されたため"
+  declined_findings: []
+lessons_candidates:
+  - "Go ツールチェーンが非対話シェルの PATH に無く（$HOME/go/compiler/bin）、workflow.yaml のコマンド文字列に PATH 前置を含める形で承認・実行した。過去 feature の `go test ./...` はこの環境では解決しない。"
+  - "`go build ./...` は go:embed 対象の internal/ui/icon.gresource が未追跡のため新規 worktree で失敗する。build/test は make ターゲット経由が必須。"
+  - "task0002 は task0001 の契約（ApplyBackgroundPattern）に依存していたが、並列実行中に親ブランチへ先にマージされたため、実装者が親をマージして実物の契約を取り込んだ。スタブ不要で済んだのは偶然のタイミングによるもの。"
+  - "batch モードで Codex CLI が未インストールだったため create-spec の相談ループが丸ごとスキップされ、仕様上の判断は全て単独決定（SPEC.md の Assumptions A1-A7 に記録）。"
+  - "レビューで挙がった medium 3 件は全て自動修正ゲート（critical/high かつ category != spec）の外側で、batch では deferred になる。うち 1 件は SPEC FR7 本文とテストシナリオ記述の食い違いという仕様側の揺れ。"
