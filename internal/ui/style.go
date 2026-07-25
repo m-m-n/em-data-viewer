@@ -6,6 +6,7 @@ package ui
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -196,6 +197,49 @@ func ApplyBackgroundPattern(style map[string]string, alt bool) map[string]string
 		}
 	}
 	return result
+}
+
+// opacityKey is the merged-style-map key EffectiveOpacity reads for a given
+// active-pattern flag, matching the public config key (window.style.opacity
+// / window.style.opacity_alt) verbatim, exactly like "background" (task0002
+// IMPLEMENTATION.md Conventions "Key names"). opacityDefault is that key's
+// built-in default, substituted when the configured value is missing,
+// unparsable, or out of range.
+func opacityKey(alt bool) (key string, fallback float64) {
+	if alt {
+		return "opacity_alt", 0.45
+	}
+	return "opacity", 1.0
+}
+
+// EffectiveOpacity returns the opacity a frame should apply to the window
+// widget for the given active-pattern flag (IMPLEMENTATION.md Shared
+// Components: "Effective-opacity selector"; task0002 calls this from its
+// apply step). style is the result of merging user overrides over the
+// window-style defaults; alt is false for the primary pattern and true for
+// the alternate. Reads the primary key ("opacity") when alt is false and
+// the alternate key ("opacity_alt") when alt is true; a missing,
+// unparsable, or out-of-range value for the selected key yields that key's
+// built-in default (1.0 primary, 0.45 alternate) -- the other key's value
+// never influences the result. style is never mutated. Always returns a
+// value in the inclusive range 0.0-1.0.
+func EffectiveOpacity(style map[string]string, alt bool) float64 {
+	key, fallback := opacityKey(alt)
+	return parseOpacityValue(style[key], fallback)
+}
+
+// parseOpacityValue turns one configured opacity string into a float,
+// falling back to fallback (assumed already valid) when v is not a decimal
+// number within 0.0-1.0 inclusive (IMPLEMENTATION.md Shared Components:
+// "Opacity value parser"). Never returns an error and never panics: an
+// unusable configured value is not an error (IMPLEMENTATION.md Conventions
+// "Error-handling policy").
+func parseOpacityValue(v string, fallback float64) float64 {
+	f, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
+	if err != nil || f < 0.0 || f > 1.0 {
+		return fallback
+	}
+	return f
 }
 
 // windowCSS translates a merged window style map into the GTK CSS block for
