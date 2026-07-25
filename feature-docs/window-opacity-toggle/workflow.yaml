@@ -25,7 +25,7 @@ workflow:
     skipped_reason: "既存ウィンドウ背景の代替アルファ値をトークン1つ追加するのみで、新規画面・コンポーネントの視覚判断がない（値は SPEC.md FR2/FR3 で確定済み）"
   - id: create-plan
     artifacts: [IMPLEMENTATION.md, VERIFICATION.md, tasks/]
-    status: in_progress
+    status: completed
   - id: implement
     status: pending
     base_commit: 376147d553c7cf900dafb3d7d51a8c1b6bffd7dc
@@ -38,7 +38,33 @@ workflow:
   - id: retrospect
     status: pending
 
-tasks: {}
+tasks:
+  task0001:
+    title: "Alternate background value, token, and selection rule"
+    plan: tasks/task0001.md
+    files:
+      - design-system/tokens.yaml
+      - internal/ui/style.go
+      - internal/ui/style_test.go
+      - config.yaml.example
+    skills: [design-impl]
+    domains: [ui, config-infra]
+    complexity: low
+    requirements: [FR1, FR2, FR3, FR4, NFR1, NFR2]
+    status: pending
+    notes: null
+  task0002:
+    title: "Ctrl+T toggle state and key controller"
+    plan: tasks/task0002.md
+    files:
+      - internal/ui/window.go
+      - internal/ui/window_test.go
+    skills: [frontend-impl]
+    domains: [ui]
+    complexity: medium
+    requirements: [FR4, FR5, FR6, FR7, FR8, NFR2, NFR3]
+    status: pending
+    notes: null
 
 review:
   status: pending
@@ -50,78 +76,78 @@ requirements:
     status: ok
     tbd_reason: null
     excluded_reason: null
-    tasks: []
-    tests: []
+    tasks: [task0001]
+    tests: [TS-1]
   FR2:
     title: "Built-in default #1e1e1e99 for background_alt"
     status: ok
     tbd_reason: null
     excluded_reason: null
-    tasks: []
-    tests: []
+    tasks: [task0001]
+    tests: [TS-2]
   FR3:
     title: "color.surface-alt design token matching the runtime default"
     status: ok
     tbd_reason: null
     excluded_reason: null
-    tasks: []
-    tests: []
+    tasks: [task0001]
+    tests: [TS-3]
   FR4:
     title: "Active pattern selects the window CSS background-color only"
     status: ok
     tbd_reason: null
     excluded_reason: null
-    tasks: []
-    tests: []
+    tasks: [task0001, task0002]
+    tests: [TS-4, TS-9]
   FR5:
     title: "Primary pattern active at startup; never persisted to config"
     status: ok
     tbd_reason: null
     excluded_reason: null
-    tasks: []
-    tests: []
+    tasks: [task0002]
+    tests: [TS-5]
   FR6:
     title: "Ctrl+T flips the active pattern and restyles live"
     status: ok
     tbd_reason: null
     excluded_reason: null
-    tasks: []
-    tests: []
+    tasks: [task0002]
+    tests: [TS-6]
   FR7:
     title: "Only Ctrl+T is claimed; other input behavior unchanged"
     status: ok
     tbd_reason: null
     excluded_reason: null
-    tasks: []
-    tests: []
+    tasks: [task0002]
+    tests: [TS-7]
   FR8:
     title: "Active pattern survives a runtime config reload"
     status: ok
     tbd_reason: null
     excluded_reason: null
-    tasks: []
-    tests: []
+    tasks: [task0002]
+    tests: [TS-8]
   NFR1:
     title: "Compatibility: configs without background_alt unchanged, startup look unchanged"
     status: ok
     tbd_reason: null
     excluded_reason: null
-    tasks: []
-    tests: []
+    tasks: [task0001]
+    tests: [TS-2, TS-10]
   NFR2:
     title: "Testability: toggle logic pure and GTK-free; config stays GTK-free"
     status: ok
     tbd_reason: null
     excluded_reason: null
-    tasks: []
-    tests: []
+    tasks: [task0001, task0002]
+    tests: [TS-4, TS-7]
   NFR3:
     title: "Usability: immediate switch with no resize or reflow"
     status: ok
     tbd_reason: null
     excluded_reason: null
-    tasks: []
-    tests: []
+    tasks: [task0002]
+    tests: [TS-6]
 
 batch:
   review_rework_count: 0
