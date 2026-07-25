@@ -34,9 +34,28 @@ workflow:
   - id: review
     status: pending
   - id: verify
-    status: in_progress
-    result: null
+    status: completed
+    completed_at_commit: 61244f819e38105499076dc981c47f3e82cf3246
+    result: pass
     failed_items: []
+    notes: >-
+      build / test / format の3コマンドすべて exit 0（gofmt は再整形ファイル無し、
+      git status クリーン）。VERIFICATION.md の TS-1〜TS-14 は internal/ui の単体
+      テストで全てカバーされ pass（TS-1 TestMergeStyle_OpacityDefaults / TS-2
+      TestMergeStyle_OpacityOverridePerKey / TS-3 TestStyleDefaults_MatchDesignTokens /
+      TS-4 TestParseOpacity_ValidInRange / TS-5,TS-6
+      TestParseOpacity_FallsBackForUnusableInput / TS-7 TestEffectiveOpacity_* 3本 /
+      TS-8 TestFrame_OpacityPatternActive_StartsPrimary +
+      TestFrame_FlipOpacityPattern_TogglesWithoutDriftAndDoesNotTouchStyleMap /
+      TS-9 TestConfigExample_OpacityKeysRoundTripThroughMerge / TS-10
+      TestMergeStyle_LegacyBackgroundAltKeyIgnored / TS-11 TestIsToggleOpacityKeyEvent /
+      TS-12,TS-13 TestFrame_EffectiveOpacity_* / TS-14
+      TestFrame_Stylesheet_IndependentOfActiveOpacityPattern）。SC-3 は
+      background_alt / surface-alt / ApplyBackgroundPattern の全文検索で確認 —
+      プロダクションコード・トークン・設定サンプルに残存なし（style_test.go の
+      ヒットは「削除されたこと」を表明する回帰テスト自体）。M-1〜M-7 の手動確認は
+      GUI セッションが必要なため無人実行では未実施 — 人間の評価者に残す。
+      excluded 要件は無し。
   - id: retrospect
     status: pending
 
