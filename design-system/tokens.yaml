@@ -6,9 +6,6 @@ color:
   surface:
     value: "#1e1e1eee"
     description: "ウィジェットウィンドウの背景（半透明ダーク）。ユーザーが config で上書きするデフォルト値。広い面はこれ一色で、セクションごとの面色は作らない"
-  surface-alt:
-    value: "#1e1e1e99"
-    description: "ウィジェットウィンドウの代替背景（surface よりさらに透過度が高い）。ランタイムのトグルで選択される。主値は surface のまま"
   on-surface:
     value: "#e0e0e0"
     description: "surface 上の出力テキストの基準色。コマンド出力が Pango マークアップで独自色を持つ場合はそちらが優先される"
@@ -27,6 +24,14 @@ color:
   error-surface:
     value: "#3a2222ee"
     description: "設定エラーバナーの背景。エラーバナー以外の面には使わない"
+
+opacity:
+  primary:
+    value: "1.0"
+    description: "ウィンドウ全体の不透明度。フルオペーク、起動時のパターンで使う値"
+  alternate:
+    value: "0.45"
+    description: "ウィンドウ全体の不透明度。キートグルで選択される、薄くなった状態のパターンで使う値"
 
 typography:
   output:

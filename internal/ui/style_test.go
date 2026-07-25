@@ -521,67 +521,170 @@ func TestSectionCSS_DefaultAndOverrideOutputSize(t *testing.T) {
 	}
 }
 
-// --- Alternate background pattern (task0001) ---
+// --- Opacity values, parser, and selector (task0001) ---
 
-// TestMergeStyle_BackgroundAltDefault references AC-1: merging a window
-// style with no background_alt override yields the default value
-// "#1e1e1e99", and leaves background at its existing default.
-func TestMergeStyle_BackgroundAltDefault(t *testing.T) {
+// TestMergeStyle_OpacityDefaults references AC-1: merging a window style
+// with neither opacity key set yields the primary opacity "1.0" and the
+// alternate opacity "0.45".
+func TestMergeStyle_OpacityDefaults(t *testing.T) {
 	got := MergeStyle(WindowStyleDefaults, nil)
 
-	if got["background_alt"] != "#1e1e1e99" {
-		t.Errorf(`MergeStyle()["background_alt"] = %q, want "#1e1e1e99"`, got["background_alt"])
+	if got["opacity"] != "1.0" {
+		t.Errorf(`MergeStyle()["opacity"] = %q, want "1.0"`, got["opacity"])
 	}
-	if got["background"] != WindowStyleDefaults["background"] {
-		t.Errorf("MergeStyle()[\"background\"] = %q, want default %q", got["background"], WindowStyleDefaults["background"])
-	}
-}
-
-// TestMergeStyle_BackgroundAltOverride references AC-2: a user
-// background_alt override is applied, and does not affect background.
-func TestMergeStyle_BackgroundAltOverride(t *testing.T) {
-	got := MergeStyle(WindowStyleDefaults, map[string]string{"background_alt": "#000000cc"})
-
-	if got["background_alt"] != "#000000cc" {
-		t.Errorf(`MergeStyle()["background_alt"] = %q, want %q`, got["background_alt"], "#000000cc")
-	}
-	if got["background"] != WindowStyleDefaults["background"] {
-		t.Errorf("MergeStyle()[\"background\"] = %q, want default %q (unaffected by background_alt override)", got["background"], WindowStyleDefaults["background"])
+	if got["opacity_alt"] != "0.45" {
+		t.Errorf(`MergeStyle()["opacity_alt"] = %q, want "0.45"`, got["opacity_alt"])
 	}
 }
 
-// TestApplyBackgroundPattern_SelectsPrimaryOrAlt references AC-3: the
-// selection rule returns the primary background when the flag is false and
-// the alternate when true, leaving every other entry identical to the
-// input.
-func TestApplyBackgroundPattern_SelectsPrimaryOrAlt(t *testing.T) {
-	style := MergeStyle(WindowStyleDefaults, nil)
-
-	primary := ApplyBackgroundPattern(style, false)
-	if primary["background"] != style["background"] {
-		t.Errorf(`ApplyBackgroundPattern(style, false)["background"] = %q, want %q`, primary["background"], style["background"])
+// TestMergeStyle_OpacityOverridePerKey references AC-2: overriding either
+// opacity key individually is reflected in the merged map and leaves the
+// other key at its default.
+func TestMergeStyle_OpacityOverridePerKey(t *testing.T) {
+	cases := []struct {
+		name           string
+		overrides      map[string]string
+		wantOpacity    string
+		wantOpacityAlt string
+	}{
+		{
+			name:           "override primary leaves alternate at default",
+			overrides:      map[string]string{"opacity": "0.8"},
+			wantOpacity:    "0.8",
+			wantOpacityAlt: "0.45",
+		},
+		{
+			name:           "override alternate leaves primary at default",
+			overrides:      map[string]string{"opacity_alt": "0.2"},
+			wantOpacity:    "1.0",
+			wantOpacityAlt: "0.2",
+		},
 	}
 
-	alt := ApplyBackgroundPattern(style, true)
-	if alt["background"] != style["background_alt"] {
-		t.Errorf(`ApplyBackgroundPattern(style, true)["background"] = %q, want %q`, alt["background"], style["background_alt"])
-	}
-
-	for _, got := range []map[string]string{primary, alt} {
-		for k, want := range style {
-			if k == "background" {
-				continue
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := MergeStyle(WindowStyleDefaults, tc.overrides)
+			if got["opacity"] != tc.wantOpacity {
+				t.Errorf(`MergeStyle()["opacity"] = %q, want %q`, got["opacity"], tc.wantOpacity)
 			}
-			if got[k] != want {
-				t.Errorf("ApplyBackgroundPattern() result[%q] = %q, want unchanged %q", k, got[k], want)
+			if got["opacity_alt"] != tc.wantOpacityAlt {
+				t.Errorf(`MergeStyle()["opacity_alt"] = %q, want %q`, got["opacity_alt"], tc.wantOpacityAlt)
 			}
-		}
+		})
 	}
 }
 
-// TestApplyBackgroundPattern_DoesNotMutateInput references AC-4: the input
-// map is byte-identical before and after a call, for either flag value.
-func TestApplyBackgroundPattern_DoesNotMutateInput(t *testing.T) {
+// TestParseOpacity_ValidInRange references AC-3: well-formed decimals
+// within 0.0-1.0 inclusive are returned as parsed, including both
+// boundaries and a value with surrounding whitespace.
+func TestParseOpacity_ValidInRange(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want float64
+	}{
+		{name: "lower boundary", in: "0.0", want: 0.0},
+		{name: "upper boundary", in: "1.0", want: 1.0},
+		{name: "mid-range value", in: "0.45", want: 0.45},
+		{name: "surrounding whitespace", in: "  0.6  ", want: 0.6},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := parseOpacity(tc.in, 0.99); got != tc.want {
+				t.Errorf("parseOpacity(%q, 0.99) = %v, want %v", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestParseOpacity_FallsBackForUnusableInput references AC-4: unparsable
+// input and out-of-range numbers fall back to the supplied fallback
+// unchanged rather than clamping.
+func TestParseOpacity_FallsBackForUnusableInput(t *testing.T) {
+	const fallback = 0.73
+	cases := []struct {
+		name string
+		in   string
+	}{
+		{name: "empty string", in: ""},
+		{name: "non-numeric text", in: "opaque"},
+		{name: "below range", in: "-0.1"},
+		{name: "above range", in: "1.1"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := parseOpacity(tc.in, fallback); got != fallback {
+				t.Errorf("parseOpacity(%q, %v) = %v, want fallback %v (not clamped)", tc.in, fallback, got, fallback)
+			}
+		})
+	}
+}
+
+// TestEffectiveOpacity_SelectsPrimaryOrAlternate references AC-5: the
+// selector returns the primary key's value when the flag is false and the
+// alternate key's value when true, for a map carrying valid values for
+// both.
+func TestEffectiveOpacity_SelectsPrimaryOrAlternate(t *testing.T) {
+	style := MergeStyle(WindowStyleDefaults, map[string]string{
+		"opacity":     "0.9",
+		"opacity_alt": "0.3",
+	})
+
+	if got := EffectiveOpacity(style, false); got != 0.9 {
+		t.Errorf("EffectiveOpacity(style, false) = %v, want 0.9", got)
+	}
+	if got := EffectiveOpacity(style, true); got != 0.3 {
+		t.Errorf("EffectiveOpacity(style, true) = %v, want 0.3", got)
+	}
+}
+
+// TestEffectiveOpacity_FallsBackToDefaultWithoutConsultingOtherKey
+// references AC-6: a missing or unusable value for the selected key falls
+// back to that key's built-in default without consulting the other key.
+func TestEffectiveOpacity_FallsBackToDefaultWithoutConsultingOtherKey(t *testing.T) {
+	cases := []struct {
+		name  string
+		flag  bool
+		style map[string]string
+		want  float64
+	}{
+		{
+			name:  "primary key missing, alternate key present and valid",
+			flag:  false,
+			style: map[string]string{"opacity_alt": "0.3"},
+			want:  1.0, // opacity's built-in default
+		},
+		{
+			name:  "primary key unusable, alternate key present and valid",
+			flag:  false,
+			style: map[string]string{"opacity": "not-a-number", "opacity_alt": "0.3"},
+			want:  1.0,
+		},
+		{
+			name:  "alternate key missing, primary key present and valid",
+			flag:  true,
+			style: map[string]string{"opacity": "0.9"},
+			want:  0.45, // opacity_alt's built-in default
+		},
+		{
+			name:  "alternate key unusable, primary key present and valid",
+			flag:  true,
+			style: map[string]string{"opacity": "0.9", "opacity_alt": "2.0"},
+			want:  0.45,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := EffectiveOpacity(tc.style, tc.flag); got != tc.want {
+				t.Errorf("EffectiveOpacity(%v, %v) = %v, want %v", tc.style, tc.flag, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestEffectiveOpacity_DoesNotMutateInput references AC-6: the input map is
+// not modified by the selector, for either flag value.
+func TestEffectiveOpacity_DoesNotMutateInput(t *testing.T) {
 	for _, alt := range []bool{false, true} {
 		style := MergeStyle(WindowStyleDefaults, nil)
 		before := make(map[string]string, len(style))
@@ -589,54 +692,72 @@ func TestApplyBackgroundPattern_DoesNotMutateInput(t *testing.T) {
 			before[k] = v
 		}
 
-		_ = ApplyBackgroundPattern(style, alt)
+		_ = EffectiveOpacity(style, alt)
 
 		if len(style) != len(before) {
-			t.Fatalf("ApplyBackgroundPattern(style, %v) changed input map size: got %d keys, want %d", alt, len(style), len(before))
+			t.Fatalf("EffectiveOpacity(style, %v) changed input map size: got %d keys, want %d", alt, len(style), len(before))
 		}
 		for k, want := range before {
 			if style[k] != want {
-				t.Errorf("ApplyBackgroundPattern(style, %v) mutated input[%q] = %q, want unchanged %q", alt, k, style[k], want)
+				t.Errorf("EffectiveOpacity(style, %v) mutated input[%q] = %q, want unchanged %q", alt, k, style[k], want)
 			}
 		}
 	}
 }
 
-// TestApplyBackgroundPattern_MissingBackgroundAltKeepsPrimary references
-// AC-5: with the alt flag true, applied to a map with no background_alt
-// entry, the primary background value is kept rather than an empty value.
-func TestApplyBackgroundPattern_MissingBackgroundAltKeepsPrimary(t *testing.T) {
-	style := map[string]string{
-		"background":  "#1e1e1eee",
-		"frame":       "#888888",
-		"frame-width": "1px",
+// TestMergeStyle_LegacyBackgroundAltKeyIgnored references AC-8: a style map
+// override that still sets the removed alternate-background key merges
+// without error, and the key is discarded (WindowStyleDefaults no longer
+// recognizes it).
+func TestMergeStyle_LegacyBackgroundAltKeyIgnored(t *testing.T) {
+	got := MergeStyle(WindowStyleDefaults, map[string]string{"background_alt": "#000000cc"})
+
+	if _, present := got["background_alt"]; present {
+		t.Errorf("MergeStyle() kept the removed background_alt key: %v", got)
 	}
-
-	got := ApplyBackgroundPattern(style, true)
-
-	if got["background"] != style["background"] {
-		t.Errorf(`ApplyBackgroundPattern(style, true)["background"] = %q, want %q (kept, no background_alt entry)`, got["background"], style["background"])
+	if len(got) != len(WindowStyleDefaults) {
+		t.Errorf("MergeStyle() returned %d keys, want %d (defaults table size, background_alt override ignored)", len(got), len(WindowStyleDefaults))
 	}
 }
 
-// TestConfigExample_BackgroundAltRoundTripsThroughMerge references AC-7:
-// the documented background_alt key in config.yaml.example round-trips
+// TestConfigExample_OpacityKeysRoundTripThroughMerge references AC-9: the
+// sample config documents both opacity keys, no longer mentions the
+// removed alternate-background key, and its documented values round-trip
 // through the window style merge (no example-file test exists in the
 // config package to attach this to).
-func TestConfigExample_BackgroundAltRoundTripsThroughMerge(t *testing.T) {
+func TestConfigExample_OpacityKeysRoundTripThroughMerge(t *testing.T) {
 	path := filepath.Join("..", "..", "config.yaml.example")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read %s: %v", path, err)
 	}
-	if !strings.Contains(string(data), "background_alt") {
-		t.Fatalf("%s does not document background_alt", path)
+	text := string(data)
+
+	if !strings.Contains(text, "opacity:") {
+		t.Errorf("%s does not document opacity", path)
+	}
+	if !strings.Contains(text, "opacity_alt:") {
+		t.Errorf("%s does not document opacity_alt", path)
+	}
+	if strings.Contains(text, "background_alt") {
+		t.Errorf("%s still documents the removed background_alt key", path)
 	}
 
-	overrides := map[string]string{"background_alt": "#000000cc"}
-	got := MergeStyle(WindowStyleDefaults, overrides)
-	if got["background_alt"] != "#000000cc" {
-		t.Errorf(`MergeStyle()["background_alt"] = %q, want %q (round-tripped override)`, got["background_alt"], "#000000cc")
+	var parsed struct {
+		Window struct {
+			Style map[string]string `yaml:"style"`
+		} `yaml:"window"`
+	}
+	if err := yaml.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("parse %s: %v", path, err)
+	}
+
+	got := MergeStyle(WindowStyleDefaults, parsed.Window.Style)
+	if got["opacity"] != "1.0" {
+		t.Errorf(`MergeStyle()["opacity"] = %q, want %q (round-tripped sample value)`, got["opacity"], "1.0")
+	}
+	if got["opacity_alt"] != "0.45" {
+		t.Errorf(`MergeStyle()["opacity_alt"] = %q, want %q (round-tripped sample value)`, got["opacity_alt"], "0.45")
 	}
 }
 
@@ -658,13 +779,16 @@ type typographyEntry struct {
 type designTokens struct {
 	Color struct {
 		Surface      tokenEntry `yaml:"surface"`
-		SurfaceAlt   tokenEntry `yaml:"surface-alt"`
 		OnSurface    tokenEntry `yaml:"on-surface"`
 		OnSurfaceDim tokenEntry `yaml:"on-surface-dim"`
 		Frame        tokenEntry `yaml:"frame"`
 		Error        tokenEntry `yaml:"error"`
 		ErrorSurface tokenEntry `yaml:"error-surface"`
 	} `yaml:"color"`
+	Opacity struct {
+		Primary   tokenEntry `yaml:"primary"`
+		Alternate tokenEntry `yaml:"alternate"`
+	} `yaml:"opacity"`
 	Typography struct {
 		Output       typographyEntry `yaml:"output"`
 		SectionLabel typographyEntry `yaml:"section-label"`
@@ -699,12 +823,13 @@ func TestStyleDefaults_MatchDesignTokens(t *testing.T) {
 
 	wantWindow := map[string]string{
 		"background":       tokens.Color.Surface.Value,
-		"background_alt":   tokens.Color.SurfaceAlt.Value,
 		"frame":            tokens.Color.Frame.Value,
 		"frame-width":      tokens.Border.FrameWidth.Value,
 		"radius":           tokens.Radius.Window.Value,
 		"error-color":      tokens.Color.Error.Value,
 		"error-background": tokens.Color.ErrorSurface.Value,
+		"opacity":          tokens.Opacity.Primary.Value,
+		"opacity_alt":      tokens.Opacity.Alternate.Value,
 	}
 	for k, want := range wantWindow {
 		if want == "" {

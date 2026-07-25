@@ -6,11 +6,12 @@ window:
   keep_above: true
   style:
     background: "#1e1e1eee"
-    # background_alt is the second transparency pattern; Ctrl+T switches
-    # between the two.
-    background_alt: "#1e1e1e99"
     border_color: "#888888"
     border_width: 1
+    # opacity is the window's opacity (0.0-1.0 inclusive); opacity_alt is
+    # the value the key toggle switches to.
+    opacity: 1.0
+    opacity_alt: 0.45
 
 sections:
   - name: clock
