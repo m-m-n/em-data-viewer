@@ -25,7 +25,7 @@ workflow:
     skipped_reason: "新規画面・新規コンポーネントは無く、既存ウィンドウの不透明度を2値にするのみ。値（1.0 / 0.45）は SPEC.md FR2/FR3 で確定済みで、視覚判断が残っていない"
   - id: create-plan
     artifacts: [IMPLEMENTATION.md, VERIFICATION.md, tasks/]
-    status: pending
+    status: in_progress
   - id: implement
     status: pending
     base_commit: null
