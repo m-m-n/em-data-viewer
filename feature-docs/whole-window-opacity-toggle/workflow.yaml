@@ -38,7 +38,33 @@ workflow:
   - id: retrospect
     status: pending
 
-tasks: {}
+tasks:
+  task0001:
+    title: "Opacity values, tokens, and the selection rule"
+    plan: tasks/task0001.md
+    files:
+      - internal/ui/style.go
+      - internal/ui/style_test.go
+      - design-system/tokens.yaml
+      - config.yaml.example
+    skills: [design-impl]
+    domains: [ui, input-handling, config-infra]
+    complexity: medium
+    requirements: [FR1, FR2, FR3, FR4, FR5, FR10, NFR1, NFR2]
+    status: pending
+    notes: null
+  task0002:
+    title: "Whole-window opacity state, apply path, and Ctrl+T retarget"
+    plan: tasks/task0002.md
+    files:
+      - internal/ui/window.go
+      - internal/ui/window_test.go
+    skills: [frontend-impl]
+    domains: [ui]
+    complexity: medium
+    requirements: [FR5, FR6, FR7, FR8, FR9, FR10, NFR2, NFR3]
+    status: pending
+    notes: null
 
 review:
   status: pending
@@ -50,92 +76,92 @@ requirements:
     status: ok
     tbd_reason: null
     excluded_reason: null
-    tasks: []
-    tests: []
+    tasks: [task0001]
+    tests: [TS-1, TS-2, TS-9]
   FR2:
     title: "Built-in defaults 1.0 (opacity) and 0.45 (opacity_alt)"
     status: ok
     tbd_reason: null
     excluded_reason: null
-    tasks: []
-    tests: []
+    tasks: [task0001]
+    tests: [TS-1]
   FR3:
     title: "opacity.window / opacity.window-alt design tokens covered by the drift guard"
     status: ok
     tbd_reason: null
     excluded_reason: null
-    tasks: []
-    tests: []
+    tasks: [task0001]
+    tests: [TS-3]
   FR4:
     title: "Pure parse-with-fallback: decimal in 0.0-1.0, else the key's default"
     status: ok
     tbd_reason: null
     excluded_reason: null
-    tasks: []
-    tests: []
+    tasks: [task0001]
+    tests: [TS-4, TS-5, TS-6]
   FR5:
     title: "Active pattern selects the window widget opacity; no other style value affected"
     status: ok
     tbd_reason: null
     excluded_reason: null
-    tasks: []
-    tests: []
+    tasks: [task0001, task0002]
+    tests: [TS-7, TS-12, TS-14]
   FR6:
     title: "Primary pattern active at startup; never persisted to config"
     status: ok
     tbd_reason: null
     excluded_reason: null
-    tasks: []
-    tests: []
+    tasks: [task0002]
+    tests: [TS-8]
   FR7:
     title: "Ctrl+T flips the active pattern and applies the opacity live without reflow"
     status: ok
     tbd_reason: null
     excluded_reason: null
-    tasks: []
-    tests: []
+    tasks: [task0002]
+    tests: [TS-12, TS-14]
   FR8:
     title: "Only Ctrl+T is claimed; other input behavior unchanged"
     status: ok
     tbd_reason: null
     excluded_reason: null
-    tasks: []
-    tests: []
+    tasks: [task0002]
+    tests: [TS-11]
   FR9:
     title: "Active pattern survives a runtime config reload; reloaded values take effect"
     status: ok
     tbd_reason: null
     excluded_reason: null
-    tasks: []
-    tests: []
+    tasks: [task0002]
+    tests: [TS-13]
   FR10:
     title: "Removal of the background_alt mechanism, its token, docs and tests"
     status: ok
     tbd_reason: null
     excluded_reason: null
-    tasks: []
-    tests: []
+    tasks: [task0001, task0002]
+    tests: [TS-10, TS-14]
   NFR1:
     title: "Compatibility: configs without the new keys unchanged, startup look unchanged"
     status: ok
     tbd_reason: null
     excluded_reason: null
-    tasks: []
-    tests: []
+    tasks: [task0001]
+    tests: [TS-1, TS-9, TS-10]
   NFR2:
     title: "Testability: parsing, selection and the state flip pure and GTK-free; config stays GTK-free"
     status: ok
     tbd_reason: null
     excluded_reason: null
-    tasks: []
-    tests: []
+    tasks: [task0001, task0002]
+    tests: [TS-7, TS-8, TS-12]
   NFR3:
     title: "Usability: immediate switch with no resize, reflow or content reload"
     status: ok
     tbd_reason: null
     excluded_reason: null
-    tasks: []
-    tests: []
+    tasks: [task0002]
+    tests: [TS-14]
 
 batch:
   review_rework_count: 0
