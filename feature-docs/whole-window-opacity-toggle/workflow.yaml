@@ -28,7 +28,8 @@ workflow:
     status: completed
     completed_at_commit: 0172a72c7eac46d5b97beece6f18bb6eb3e7ec57
   - id: implement
-    status: in_progress
+    status: completed
+    completed_at_commit: 203174ca0fba853ee6767c6748012d75bb1d62ab
     base_commit: eb7c6fc8a400870431259cb3c11233a8c415a169
   - id: review
     status: pending
@@ -77,8 +78,8 @@ tasks:
     domains: [ui]
     complexity: low
     requirements: [FR4, FR5, NFR2]
-    status: in_progress
-    notes: "orchestrator-synthesized: integration build broke with EffectiveOpacity redeclared after task0001/task0002 both added the shared contract to style.go"
+    status: merged
+    notes: "orchestrator-synthesized: integration build broke with EffectiveOpacity redeclared after task0001/task0002 both added the shared contract to style.go; merge commit 203174ca0fba853ee6767c6748012d75bb1d62ab; conflict_retries 0; tests pass; no deviations; pure deletion of 43 lines, no test file touched"
     branch: em-workflow/whole-window-opacity-toggle/task0003
 
 
