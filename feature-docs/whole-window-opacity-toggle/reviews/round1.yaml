@@ -1,0 +1,121 @@
+round: 1
+executed_at: "2026-07-25T17:36:00+09:00"
+scope:
+  review_mode: diff
+  base_commit: eb7c6fc8a400870431259cb3c11233a8c415a169
+  head_commit: 5b8ee36f405a07fd2c69ca05b949d9fa9ec94ae4
+  changed_files:
+    - config.yaml.example
+    - design-system/tokens.yaml
+    - internal/ui/style.go
+    - internal/ui/style_test.go
+    - internal/ui/window.go
+    - internal/ui/window_test.go
+plan:
+  floor: [comprehensive, security, spec]
+  discretionary: []
+  codex_cross_validation: false
+perspective_runs:
+  - {perspective: comprehensive, source: claude, status: completed}
+  - {perspective: security, source: claude, status: completed}
+  - {perspective: spec, source: claude, status: completed}
+  - {perspective: security, source: codex, status: skipped, skip_reason: "codex-cli unavailable"}
+  - {perspective: spec, source: codex, status: skipped, skip_reason: "codex-cli unavailable"}
+findings:
+  - stable_id: aa4c05591f9489f1
+    severity: medium
+    category: comprehensive
+    file: internal/ui/style.go
+    line: 196
+    title: "parseOpacity の範囲チェックを NaN がすり抜ける"
+    description: >-
+      strconv.ParseFloat は "NaN" / "nan" / "-nan" を err==nil で受理する。続く
+      `if n < 0.0 || n > 1.0` は NaN に対して両方 false になるため、NaN がそのまま
+      返る。"inf" は n > 1.0 が true で fallback に落ちるのに、NaN だけが素通りする。
+      結果として window.style.opacity: NaN を書いた config で applyOpacity →
+      SetOpacity(NaN) に到達する。GTK 側の CLAMP も NaN を素通しし、alpha =
+      round(NaN*255) の guint8 変換は実装依存（x86-64 では 0）なので、ウィンドウが
+      完全に不可視になり、エラーバナーも出ない。SPEC FR4 の「0.0-1.0 の範囲内での
+      み受理し、範囲外は各キーの既定値へフォールバック」という契約に反する経路で、
+      style_test.go の TestParseOpacity_FallsBackForUnusableInput にも NaN ケースが
+      ない。
+    suggestion: >-
+      範囲チェックを「含まれることの肯定形」で書けば NaN も弾ける（新規 import 不要）:
+      `if n < 0.0 || n > 1.0` を `if !(n >= 0.0 && n <= 1.0)` に置き換える。
+      あわせて TestParseOpacity_FallsBackForUnusableInput に NaN ケースを追加する。
+    sources: [claude:comprehensive]
+    confidence: 65
+    resolution: unresolved
+    resolution_reason: "severity medium — R4 auto-fix candidate gate (critical/high のみ) の対象外"
+  - stable_id: cde75b3d5893778e
+    severity: medium
+    category: spec
+    file: internal/ui/style.go
+    line: 190
+    title: "parseOpacity が NaN を「範囲内」として受理し、FR4 のフォールバックが働かない"
+    description: >-
+      SPEC FR4 は「0.0-1.0 の inclusive range に収まるときだけ受理し、解釈不能な値
+      および範囲外の値は該当キーの既定値へフォールバックする」と規定している。NaN は
+      その範囲内の値ではないため FR4 の受理条件に反する。上の comprehensive 観点の
+      指摘と同一の物理的欠陥を、仕様準拠の側面から捉えたもの（行位置が 5 行を超えて
+      離れているため same_site 判定では統合されない）。加えて "0x1p-1" のような 16
+      進浮動小数点表記も ParseFloat が受理するため、FR4 の "decimal number" という
+      限定からは外れる（範囲内に収まるため実害は小さい）。
+    suggestion: >-
+      `if n < 0.0 || n > 1.0` を `if !(n >= 0.0 && n <= 1.0)` に置き換え、
+      TestParseOpacity_FallsBackForUnusableInput に NaN ケースを追加する。
+    sources: [claude:spec]
+    confidence: 70
+    resolution: unresolved
+    resolution_reason: "severity medium — R4 auto-fix candidate gate (critical/high のみ) の対象外"
+  - stable_id: 09327f0071d7f688
+    severity: medium
+    category: comprehensive
+    file: internal/ui/style.go
+    line: 214
+    title: "EffectiveOpacity のフォールバック解決でパースエラーを握り潰しており、最悪値 0.0 に落ちる"
+    description: >-
+      `fallback, _ := strconv.ParseFloat(WindowStyleDefaults[key], 64)` はエラーを
+      捨てているため、WindowStyleDefaults の該当値がパース不能になった瞬間に
+      fallback が 0.0（完全透明）になる。0.0 は安全側ではなく最悪側で、起動直後から
+      ウィンドウが不可視になり、しかも無言で起きる。ドリフトガード
+      TestStyleDefaults_MatchDesignTokens は tokens.yaml と defaults テーブルの一致
+      と空でないことしか見ていないので、両者を揃えて非数値にしてもテストは緑のまま
+      通り、この経路を防げない。
+    suggestion: >-
+      最終フォールバックを検証済みパーサ経由かつ可視側（1.0）に倒す:
+      `fallback := parseOpacity(WindowStyleDefaults[key], 1.0)`。加えて
+      TestStyleDefaults_MatchDesignTokens で両トークン値が 0.0-1.0 の float として
+      パースできることも表明する。
+    sources: [claude:comprehensive]
+    confidence: 65
+    resolution: unresolved
+    resolution_reason: "severity medium — R4 auto-fix candidate gate (critical/high のみ) の対象外"
+  - stable_id: 03737e46bcdc6c99
+    severity: medium
+    category: spec
+    file: design-system/tokens.yaml
+    line: 28
+    title: "opacity トークンのキー名が FR3 の指定 (opacity.window / opacity.window-alt) と異なる"
+    description: >-
+      SPEC FR3 は tokens.yaml に opacity.window ("1.0") と opacity.window-alt
+      ("0.45") を追加すると規定し、Test Scenarios の TS-3 も同じキー名を名指ししている。
+      実装は opacity.primary / opacity.alternate を採用しており、仕様が指定した
+      トークンキーと一致しない。drift-guard 側の構造体タグも同じ名前に合わせてある
+      ためテストは通るが、デザイントークンのキー名は design-system の公開契約であり、
+      SPEC を参照する後続作業と食い違う。値と description の内容自体は FR3 を満たす。
+    suggestion: >-
+      トークンキーを SPEC どおり opacity.window / opacity.window-alt へ改名し、
+      style_test.go の drift-guard 構造体タグと style.go のコメント内参照も更新する。
+      あるいは命名変更が意図的な判断であれば SPEC FR3 と TS-3 の記述を実装側の名前に
+      改訂して仕様と実装を一致させる。
+    sources: [claude:spec]
+    confidence: 70
+    resolution: unresolved
+    resolution_reason: "severity medium — R4 auto-fix candidate gate (critical/high のみ) の対象外"
+auto_fix:
+  loops_run: 0
+  applied_total: 0
+  termination: clean
+residual_critical_high: 0
+rework_required: false

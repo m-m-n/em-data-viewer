@@ -84,8 +84,14 @@ tasks:
 
 
 review:
-  status: in_progress
-  rounds_completed: 0
+  status: completed
+  rounds_completed: 1
+  perspectives:
+    comprehensive: completed
+    security: completed
+    spec: completed
+  residual_critical_high: 0
+  needs_rework: false
   plan:
     floor: [comprehensive, security, spec]
     discretionary: []
