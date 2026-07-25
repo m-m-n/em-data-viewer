@@ -52,8 +52,8 @@ tasks:
     domains: [ui, config-infra]
     complexity: low
     requirements: [FR1, FR2, FR3, FR4, NFR1, NFR2]
-    status: in_progress
-    notes: null
+    status: merged
+    notes: "merge commit 1b9a2f55fc9dc9c9baad15420188ab02011c4493; conflict_retries 0; tests pass; no deviations"
     branch: em-workflow/window-opacity-toggle/task0001
   task0002:
     title: "Ctrl+T toggle state and key controller"
