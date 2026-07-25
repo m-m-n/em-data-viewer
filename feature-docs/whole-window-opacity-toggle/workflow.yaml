@@ -84,8 +84,12 @@ tasks:
 
 
 review:
-  status: pending
+  status: in_progress
   rounds_completed: 0
+  plan:
+    floor: [comprehensive, security, spec]
+    discretionary: []
+    codex_cross_validation: false
 
 requirements:
   FR1:
