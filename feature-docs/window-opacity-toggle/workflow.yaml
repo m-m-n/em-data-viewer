@@ -35,9 +35,15 @@ workflow:
     status: completed
     completed_at_commit: c64830566c9c43aa6b7df6cf038a1fe3423f427d
   - id: verify
-    status: pending
-    result: null
+    status: completed
+    completed_at_commit: f1a424e6f787e9c0dad3b4b768942e7a91d3a49e
+    result: pass
     failed_items: []
+    notes: >-
+      build / test / format の3コマンドすべて exit 0。VERIFICATION.md の TS-1〜TS-10 は
+      internal/ui の単体テストで全てカバーされ pass（対応テスト名は round1 レビュー記録と
+      同じ HEAD で確認済み）。M-1〜M-6 の手動確認は GUI セッションが必要なため無人実行では
+      未実施 — 人間の評価者に残す。excluded 要件は無し。
   - id: retrospect
     status: pending
 
