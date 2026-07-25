@@ -65,9 +65,21 @@ tasks:
     domains: [ui]
     complexity: medium
     requirements: [FR5, FR6, FR7, FR8, FR9, FR10, NFR2, NFR3]
-    status: in_progress
-    notes: null
+    status: merged
+    notes: "merge commit 9fa93d772cd79878aa8827923f13351fce19ffab; conflict_retries 0; tests pass in isolation; DEVIATION: also added the effective-opacity selector to internal/ui/style.go (task0001's file) because task0001 had not committed yet at fork time — git auto-merged both additions, duplicating EffectiveOpacity and breaking the integrated build; resolved by task0003"
     branch: em-workflow/whole-window-opacity-toggle/task0002
+  task0003:
+    title: "Resolve the duplicated effective-opacity selector"
+    plan: tasks/task0003.md
+    files:
+      - internal/ui/style.go
+    skills: []
+    domains: [ui]
+    complexity: low
+    requirements: [FR4, FR5, NFR2]
+    status: pending
+    notes: "orchestrator-synthesized: integration build broke with EffectiveOpacity redeclared after task0001/task0002 both added the shared contract to style.go"
+
 
 review:
   status: pending
@@ -100,14 +112,14 @@ requirements:
     status: ok
     tbd_reason: null
     excluded_reason: null
-    tasks: [task0001]
+    tasks: [task0001, task0003]
     tests: [TS-4, TS-5, TS-6]
   FR5:
     title: "Active pattern selects the window widget opacity; no other style value affected"
     status: ok
     tbd_reason: null
     excluded_reason: null
-    tasks: [task0001, task0002]
+    tasks: [task0001, task0002, task0003]
     tests: [TS-7, TS-12, TS-14]
   FR6:
     title: "Primary pattern active at startup; never persisted to config"
@@ -156,7 +168,7 @@ requirements:
     status: ok
     tbd_reason: null
     excluded_reason: null
-    tasks: [task0001, task0002]
+    tasks: [task0001, task0002, task0003]
     tests: [TS-7, TS-8, TS-12]
   NFR3:
     title: "Usability: immediate switch with no resize, reflow or content reload"
