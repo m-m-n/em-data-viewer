@@ -52,6 +52,8 @@ file, in config order. Each section has a name label and an output area.
   lines (default 100, oldest dropped first).
 - Output is rendered as Pango markup; invalid markup falls back to
   escaped plain text.
+- Shade characters `░` `▒` `▓` in output text are drawn as `█` with 25% /
+  50% / 75% foreground alpha.
 - Command spawn/exit failure shows an error inside that section while
   other sections keep running.
 - A config with zero sections shows an empty window (frame only).

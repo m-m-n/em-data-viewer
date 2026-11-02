@@ -31,10 +31,10 @@ func translateEvent(ev runner.Event, snapshot func(key string) []string) (key, t
 	case runner.KindAppend:
 		joined := stripTrailingNewlines(strings.Join(snapshot(ev.SectionKey), "\n"))
 		rendered, _ := markup.Render(joined)
-		return ev.SectionKey, rendered, false
+		return ev.SectionKey, markup.ExpandShades(rendered), false
 	default: // runner.KindReplace
 		rendered, _ := markup.Render(stripTrailingNewlines(ev.Text))
-		return ev.SectionKey, rendered, false
+		return ev.SectionKey, markup.ExpandShades(rendered), false
 	}
 }
 
